@@ -1,0 +1,8 @@
+{
+  "name": "rx-browser-bridge",
+  "version": "0.1.0",
+  "description": "Drive any browser tab from this Claude Code session via a self-hosted relay + MV3 extension.",
+  "author": { "name": "arikw", "url": "https://github.com/arikw" },
+  "homepage": "https://github.com/arikw/rx-browser-bridge",
+  "license": "MIT"
+}

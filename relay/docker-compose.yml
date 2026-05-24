@@ -1,0 +1,15 @@
+services:
+  relay:
+    build: .
+    image: rx-browser-bridge-relay:dev
+    container_name: rx-browser-bridge-relay
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PORT:-3000}:${PORT:-3000}"
+    env_file:
+      - ../.env
+    environment:
+      # Overrides — compose mounts ./data to /data regardless of host DATA_DIR.
+      - DATA_DIR=/data
+    volumes:
+      - ./data:/data

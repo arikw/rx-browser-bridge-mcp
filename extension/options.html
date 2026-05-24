@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>rx-browser-bridge — Options</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; max-width: 540px; margin: 24px auto; padding: 0 16px; }
+    h1 { font-size: 16px; }
+    label { display: block; margin: 10px 0 4px; font-weight: 600; }
+    input { width: 100%; padding: 6px 8px; font: inherit; box-sizing: border-box; }
+    .hint { color: #666; font-size: 12px; margin-top: 2px; }
+    button { margin-top: 16px; padding: 6px 14px; font: inherit; cursor: pointer; }
+    .saved { color: #060; margin-left: 10px; }
+  </style>
+</head>
+<body>
+  <h1>rx-browser-bridge — Options</h1>
+
+  <label for="relay_url">Relay URL (WebSocket)</label>
+  <input id="relay_url" placeholder="ws://localhost:3000/ws">
+  <div class="hint">Use wss:// for TLS-fronted deployments.</div>
+
+  <label for="puller_token">Puller token</label>
+  <input id="puller_token" type="password" placeholder="dev-puller">
+  <div class="hint">Shared secret. Same as relay's <code>PULLER_TOKEN</code> env.</div>
+
+  <label for="browser_id">Browser id</label>
+  <input id="browser_id" placeholder="(auto)">
+  <div class="hint">Friendly id like <code>office</code> or <code>home-laptop</code>.</div>
+
+  <label for="owner">Owner</label>
+  <input id="owner" placeholder="anon">
+
+  <label for="tags">Tags (comma-separated)</label>
+  <input id="tags" placeholder="reddit, hn, twitter">
+
+  <button id="save">Save</button>
+  <span class="saved" id="saved-msg"></span>
+
+  <script src="options.js"></script>
+</body>
+</html>

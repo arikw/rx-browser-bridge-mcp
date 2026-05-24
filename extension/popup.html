@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>rx-browser-bridge</title>
+  <style>
+    body { font: 12px/1.4 system-ui, sans-serif; margin: 0; padding: 12px; width: 360px; }
+    h1 { font-size: 13px; margin: 0 0 8px; }
+    .status { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #c00; }
+    .dot.on { background: #2c2; }
+    .dot.connecting, .dot.retrying { background: #d90; animation: pulse 1s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: 0.3; } }
+    .err { color: #a00; font-size: 11px; margin: 4px 0 0 14px; word-break: break-all; }
+    .row { display: flex; gap: 6px; margin: 6px 0; }
+    .relay-row input { flex: 1; padding: 3px 6px; font: inherit; min-width: 0; }
+    .nudge { color: #a60; font-size: 11px; margin-left: 14px; }
+    button { padding: 4px 10px; font: inherit; cursor: pointer; }
+    .audit { margin-top: 10px; max-height: 280px; overflow-y: auto; border-top: 1px solid #eee; padding-top: 6px; }
+    .audit-row { padding: 3px 0; border-bottom: 1px dashed #eee; font-family: ui-monospace, monospace; font-size: 11px; }
+    .audit-row.cmd { color: #036; }
+    .audit-row.result { color: #060; }
+    .audit-row.disconnected, .audit-row.connected { color: #888; }
+  </style>
+</head>
+<body>
+  <h1>rx-browser-bridge</h1>
+  <div class="status">
+    <span class="dot" id="dot"></span>
+    <span id="status-text">checking…</span>
+  </div>
+  <div class="err" id="err" hidden></div>
+  <div class="nudge" id="nudge" hidden>check relay URL below or in Options</div>
+  <div class="row relay-row">
+    <input id="relay_url" placeholder="ws://localhost:3000/ws" spellcheck="false">
+    <button id="save-url">Save</button>
+  </div>
+  <div class="row">
+    <button id="toggle">Disable</button>
+    <button id="reconnect" title="Force immediate reconnect and reset backoff">Reconnect</button>
+    <button id="options">Options</button>
+  </div>
+  <div class="audit" id="audit"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

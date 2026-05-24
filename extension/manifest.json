@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "rx-browser-bridge",
+  "version": "0.1.0",
+  "description": "Bridges this browser to a Claude Code session via a relay server.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "tabs",
+    "storage",
+    "notifications"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "rx-browser-bridge",
+    "default_popup": "popup.html"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  }
+}

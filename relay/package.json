@@ -1,0 +1,21 @@
+{
+  "name": "@rx-browser-bridge/relay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "node --env-file-if-exists=../.env --import tsx --watch src/server.ts",
+    "start": "node --env-file-if-exists=../.env dist/server.js",
+    "build": "esbuild src/server.ts --bundle --platform=node --target=node20 --format=esm --packages=external --outfile=dist/server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.6.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/ws": "^8.5.13",
+    "esbuild": "^0.24.0"
+  }
+}
