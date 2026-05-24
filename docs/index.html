@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RX Browser Bridge — drive any browser tab from Claude Code</title>
+<meta name="description" content="A Claude Code MCP server + MV3 extension that lets your live coding agent drive any browser tab you already have open. Your logins, your cookies, your extensions — Claude just clicks through them.">
+<meta property="og:title" content="RX Browser Bridge">
+<meta property="og:description" content="Drive any browser tab from your live Claude Code session. Your real browser, your real sessions. Open source.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://arikw.github.io/rx-browser-bridge-mcp/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='80' font-size='80'%3E🌐%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          ink:    { 950: '#0a0d12', 900: '#101521', 800: '#1a2233', 700: '#243049' },
+          accent: { 400: '#7dd3fc', 500: '#38bdf8', 600: '#0ea5e9' },
+          mauve:  { 400: '#c4b5fd', 500: '#a78bfa', 600: '#8b5cf6' },
+        },
+        fontFamily: {
+          sans: ['Inter', 'system-ui', 'sans-serif'],
+          mono: ['JetBrains Mono', 'Menlo', 'monospace'],
+        },
+      },
+    },
+  }
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  html { scroll-behavior: smooth; }
+  body { font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .mono { font-family: 'JetBrains Mono', Menlo, monospace; }
+
+  /* Hero gradient background */
+  .hero-bg {
+    background:
+      radial-gradient(circle at 20% 10%, rgba(56,189,248,0.18) 0%, transparent 45%),
+      radial-gradient(circle at 90% 20%, rgba(167,139,250,0.18) 0%, transparent 50%),
+      radial-gradient(circle at 50% 90%, rgba(56,189,248,0.10) 0%, transparent 50%),
+      #0a0d12;
+  }
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  /* Terminal mockup */
+  .terminal {
+    background: #0d1117;
+    border: 1px solid #243049;
+    border-radius: 12px;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.6), 0 0 0 1px rgba(56,189,248,0.05) inset;
+    overflow: hidden;
+  }
+  .terminal-bar {
+    background: #1a2233;
+    border-bottom: 1px solid #243049;
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .term-dot { width: 12px; height: 12px; border-radius: 50%; }
+
+  /* Browser window mockup */
+  .browser {
+    background: #1c1c1e;
+    border-radius: 12px;
+    border: 1px solid #243049;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.55), 0 0 0 1px rgba(167,139,250,0.08) inset;
+    overflow: hidden;
+  }
+  .browser-bar {
+    background: #2a2a2c;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #1a1a1c;
+  }
+  .browser-tab {
+    background: #1c1c1e;
+    padding: 4px 12px;
+    border-radius: 6px 6px 0 0;
+    font-size: 11px;
+    color: #d4d4d8;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .browser-url {
+    background: #1c1c1e;
+    color: #a1a1aa;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    flex: 1;
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    border: 1px solid #1a1a1c;
+  }
+
+  /* Subtle animations */
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50%      { transform: translateY(-6px); }
+  }
+  .float-slow { animation: float 6s ease-in-out infinite; }
+  .float-med  { animation: float 4.5s ease-in-out infinite; animation-delay: 1s; }
+
+  @keyframes blink {
+    0%, 50%   { opacity: 1; }
+    50.01%, 100% { opacity: 0; }
+  }
+  .blink { animation: blink 1.1s steps(1) infinite; }
+
+  /* Feature card hover */
+  .feature-card {
+    background: rgba(26, 34, 51, 0.6);
+    border: 1px solid rgba(255,255,255,0.06);
+    transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  }
+  .feature-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(56,189,248,0.4);
+    background: rgba(26, 34, 51, 0.85);
+  }
+
+  /* Code copy button */
+  .copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(56,189,248,0.15);
+    border: 1px solid rgba(56,189,248,0.3);
+    color: #7dd3fc;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .copy-btn:hover { background: rgba(56,189,248,0.25); }
+  .copy-btn.copied { background: rgba(34,197,94,0.2); border-color: rgba(34,197,94,0.5); color: #86efac; }
+
+  /* Nav */
+  .nav-link {
+    color: rgba(229,231,235,0.7);
+    transition: color 0.15s;
+  }
+  .nav-link:hover { color: white; }
+
+  /* Comparison table — winner highlight */
+  .winner-col {
+    background: linear-gradient(180deg, rgba(56,189,248,0.08), rgba(167,139,250,0.04));
+  }
+
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] summary svg { transform: rotate(90deg); }
+  details summary svg { transition: transform 0.15s ease; }
+
+  /* Horizontal-scroll fade — visual hint that content extends to the right. */
+  .scroll-fade { position: relative; }
+  .scroll-fade::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0; right: 0;
+    width: 32px;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, #0d1117);
+    border-bottom-right-radius: 12px;
+  }
+  .scroll-fade.fade-dark::after {
+    background: linear-gradient(90deg, transparent, #101521);
+  }
+</style>
+</head>
+<body class="bg-ink-950 text-gray-100">
+
+<!-- ========================================================== NAV -->
+<header class="sticky top-0 z-50 bg-ink-950/80 backdrop-blur-md border-b border-white/5">
+  <nav class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+    <a href="#" class="flex items-center gap-2 font-semibold">
+      <span class="text-2xl">🌐</span>
+      <span>rx-browser-bridge</span>
+    </a>
+    <div class="flex items-center gap-6 text-sm">
+      <a href="#how-it-works"  class="nav-link hidden md:inline">How it works</a>
+      <a href="#features"      class="nav-link hidden md:inline">Features</a>
+      <a href="#compare"       class="nav-link hidden md:inline">Compare</a>
+      <a href="#faq"           class="nav-link hidden md:inline">FAQ</a>
+      <a href="https://github.com/arikw/rx-browser-bridge-mcp"
+         class="inline-flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1.5 rounded-md text-sm transition">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.4.6.1.82-.26.82-.58 0-.29-.01-1.05-.02-2.06-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.09 1.83 1.24 1.83 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.66-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.3-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22 0 1.61-.02 2.9-.02 3.3 0 .32.22.7.83.58A12 12 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        Star
+      </a>
+    </div>
+  </nav>
+</header>
+
+<!-- ========================================================== HERO -->
+<section class="hero-bg relative overflow-hidden">
+  <div class="absolute inset-0 grid-bg opacity-30"></div>
+  <div class="relative max-w-7xl mx-auto px-6 pt-16 pb-24 md:pt-24 md:pb-32 grid md:grid-cols-2 gap-12 items-center">
+
+    <!-- left: pitch -->
+    <div class="min-w-0">
+      <div class="inline-flex items-center gap-2 bg-mauve-500/10 border border-mauve-500/30 text-mauve-400 text-xs px-3 py-1 rounded-full mb-6">
+        <span class="w-1.5 h-1.5 rounded-full bg-mauve-400 animate-pulse"></span>
+        Walking-skeleton POC · v0.1.0
+      </div>
+
+      <h1 class="text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight leading-[1.1]">
+        Your coding agent,
+        <span class="bg-gradient-to-r from-accent-400 to-mauve-400 bg-clip-text text-transparent">in your real browser.</span>
+      </h1>
+
+      <p class="mt-5 md:mt-6 text-base sm:text-lg md:text-xl text-gray-300 leading-relaxed">
+        Drive any browser tab from a live Claude Code session — through the
+        browser you already have open. Your logins, your cookies, your
+        extensions. No fresh Playwright instance. No CDP debug port. No
+        re-auth dance.
+        <em class="text-white">Just the browser already on your desk.</em>
+      </p>
+
+      <!-- Install CTA -->
+      <div class="mt-6 md:mt-8 relative max-w-xl w-full">
+        <div class="terminal">
+          <div class="terminal-bar">
+            <div class="term-dot bg-red-500/80"></div>
+            <div class="term-dot bg-yellow-500/80"></div>
+            <div class="term-dot bg-green-500/80"></div>
+            <span class="mono text-xs text-gray-500 ml-2">install</span>
+          </div>
+          <div class="scroll-fade">
+            <pre id="install-snippet" class="mono text-xs sm:text-sm p-4 text-gray-100 overflow-x-auto"><span class="text-gray-500"># 1. clone + build</span>
+<span class="text-accent-400">$</span> git clone https://github.com/arikw/rx-browser-bridge-mcp
+<span class="text-accent-400">$</span> cd rx-browser-bridge-mcp &amp;&amp; npm install &amp;&amp; npm -w mcp run build
+
+<span class="text-gray-500"># 2. boot the relay (or: docker compose up)</span>
+<span class="text-accent-400">$</span> npm -w relay run dev
+
+<span class="text-gray-500"># 3. load extension/ unpacked into Chrome/Edge/Brave, then:</span>
+<span class="text-accent-400">$</span> claude --mcp-config ./.mcp.json</pre>
+          </div>
+        </div>
+        <button class="copy-btn mono" onclick="copyInstall(this)">copy</button>
+      </div>
+
+      <div class="mt-6 flex flex-wrap gap-3">
+        <a href="https://github.com/arikw/rx-browser-bridge-mcp"
+           class="inline-flex items-center gap-2 bg-accent-500 hover:bg-accent-600 text-white px-5 py-3 rounded-lg font-medium transition shadow-lg shadow-accent-500/20">
+          Get the project →
+        </a>
+        <a href="https://github.com/arikw/rx-browser-bridge-mcp#readme"
+           class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-5 py-3 rounded-lg font-medium transition">
+          Read the docs
+        </a>
+      </div>
+
+      <div class="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-400">
+        <span class="flex items-center gap-1.5">
+          <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          MIT licensed
+        </span>
+        <span class="flex items-center gap-1.5">
+          <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          Self-hosted relay
+        </span>
+        <span class="flex items-center gap-1.5">
+          <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          Chrome · Edge · Brave (Chromium MV3)
+        </span>
+      </div>
+    </div>
+
+    <!-- right: dual mockup (terminal + browser) -->
+    <div class="relative flex justify-center items-center md:min-h-[480px] min-w-0">
+
+      <!-- Terminal — CC session driving the browser -->
+      <div class="terminal w-full max-w-md md:float-slow relative z-10">
+        <div class="terminal-bar">
+          <div class="term-dot bg-red-500/80"></div>
+          <div class="term-dot bg-yellow-500/80"></div>
+          <div class="term-dot bg-green-500/80"></div>
+          <span class="mono text-xs text-gray-500 ml-2">claude · my-project</span>
+        </div>
+        <div class="mono text-xs p-4 text-gray-200 leading-relaxed">
+          <div class="text-gray-500">&gt; check if my PR triggered the deploy on the office browser</div>
+          <div class="mt-3 text-green-300">●</div>
+          <div class="text-gray-200">Calling <span class="text-mauve-400">screenshot</span> on browser <span class="text-accent-400">"office"</span>…</div>
+          <div class="text-gray-400">  ↳ active tab: github.com/acme/api/actions</div>
+          <div class="mt-2 text-gray-200">Calling <span class="text-mauve-400">query</span> for <span class="text-accent-400">".workflow-run-status"</span>…</div>
+          <div class="text-gray-400">  ↳ "queued · #4821 · 0:12 ago"</div>
+          <div class="mt-3 text-gray-200">Deploy is queued behind one other run. ETA ~3min.</div>
+          <div class="mt-3 text-gray-500">&gt; navigate to the logs view</div>
+          <div class="mt-2 text-green-300">●</div>
+          <div class="text-gray-200">Calling <span class="text-mauve-400">navigate</span>…</div>
+          <div class="mt-3 text-accent-400 mono">$ <span class="blink">▌</span></div>
+        </div>
+      </div>
+
+      <!-- Browser window (hidden on mobile) -->
+      <div class="browser hidden md:block absolute md:right-0 md:-bottom-12 w-72 float-med">
+        <div class="browser-bar">
+          <div class="flex gap-1.5">
+            <div class="term-dot bg-red-400/70"></div>
+            <div class="term-dot bg-yellow-400/70"></div>
+            <div class="term-dot bg-green-400/70"></div>
+          </div>
+          <div class="browser-tab ml-2">acme/api · Actions</div>
+        </div>
+        <div class="px-3 py-2 flex items-center gap-2 bg-[#2a2a2c] border-b border-[#1a1a1c]">
+          <span class="text-gray-500 text-xs">←  →  ⟳</span>
+          <div class="browser-url">github.com/acme/api/actions</div>
+        </div>
+        <div class="p-3 bg-[#0d1117] text-xs space-y-2">
+          <div class="flex items-center justify-between text-gray-300">
+            <span>#4821 deploy</span>
+            <span class="text-yellow-300">● queued</span>
+          </div>
+          <div class="h-1 bg-white/5 rounded">
+            <div class="h-1 w-1/3 bg-yellow-400/70 rounded"></div>
+          </div>
+          <div class="text-gray-500 text-[10px]">0:12 ago · main · arikw</div>
+          <div class="mt-3 border-t border-white/5 pt-2 text-gray-400 text-[10px]">
+            <div class="inline-block px-1.5 py-0.5 bg-mauve-500/15 text-mauve-400 rounded mr-1">extension</div>
+            <span class="mono">rx-browser-bridge · linked · office</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================== HOW IT WORKS -->
+<section id="how-it-works" class="py-20 md:py-28 bg-ink-900 border-y border-white/5">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="text-center mb-14">
+      <h2 class="text-3xl md:text-4xl font-bold">How it works</h2>
+      <p class="mt-3 text-gray-400 text-lg">Three pieces. Self-hosted relay, MCP server, MV3 extension.</p>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-6">
+      <div class="feature-card rounded-xl p-6">
+        <div class="w-10 h-10 rounded-lg bg-accent-500/15 text-accent-400 flex items-center justify-center mb-3">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 12a7 7 0 0 1 14 0M2 12a10 10 0 0 1 20 0M8.5 12a3.5 3.5 0 1 1 7 0"/>
+          </svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">1. Relay — the meeting point</h3>
+        <p class="text-gray-400 text-sm leading-relaxed">A small Node HTTP+WS server. Claude Code POSTs commands to it; the browser extension pulls them off via a persistent WebSocket. Two static bearer tokens — POSTER (writes) and PULLER (reads) — so a leak of one doesn't grant the other. Sqlite audit log on every action.</p>
+      </div>
+      <div class="feature-card rounded-xl p-6">
+        <div class="w-10 h-10 rounded-lg bg-mauve-500/15 text-mauve-400 flex items-center justify-center mb-3">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 7h6l2 3 2-3h8M3 17h6l2-3 2 3h8"/>
+          </svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">2. MCP server — Claude's tools</h3>
+        <p class="text-gray-400 text-sm leading-relaxed">A stdio MCP server loaded by Claude Code via <span class="mono text-accent-400">.mcp.json</span>. Exposes <span class="mono text-accent-400">list_browsers</span>, <span class="mono text-accent-400">screenshot</span>, <span class="mono text-accent-400">navigate</span>, <span class="mono text-accent-400">new_tab</span>, <span class="mono text-accent-400">click</span>, <span class="mono text-accent-400">fill</span>, <span class="mono text-accent-400">query</span>. Each tool call enqueues on the relay and long-polls for the result.</p>
+      </div>
+      <div class="feature-card rounded-xl p-6">
+        <div class="w-10 h-10 rounded-lg bg-yellow-500/15 text-yellow-400 flex items-center justify-center mb-3">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 3 4 14h7l-1 7 9-11h-7l1-7z"/>
+          </svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">3. Extension — the executor</h3>
+        <p class="text-gray-400 text-sm leading-relaxed">Manifest v3 extension that maintains a persistent WS to the relay. Each command runs against the active tab via <span class="mono">chrome.scripting.executeScript</span> + <span class="mono">chrome.tabs.captureVisibleTab</span>. Destructive actions trigger a Chrome notification with Allow / Deny — default-deny after 10s.</p>
+      </div>
+    </div>
+
+    <!-- Data flow diagram -->
+    <div class="mt-12 max-w-3xl mx-auto">
+      <div class="text-center text-xs uppercase tracking-widest text-gray-500 mb-4">data flow (per tool call)</div>
+
+      <div class="space-y-2">
+
+        <!-- Node 1: CC TUI -->
+        <div class="rounded-xl border border-accent-500/40 bg-accent-500/[0.08] px-5 py-4">
+          <div class="text-[10px] uppercase tracking-wider text-accent-400 mb-1">Your terminal</div>
+          <div class="font-medium text-gray-100">Live Claude Code TUI session</div>
+          <div class="text-xs text-gray-400 mt-1">calls one of the MCP tools (<span class="mono">screenshot</span>, <span class="mono">click</span>, <span class="mono">fill</span>, …) with optional <span class="mono">target</span> or <span class="mono">tag</span></div>
+        </div>
+
+        <!-- Hop: TUI ↔ MCP -->
+        <div class="flex items-center gap-3 pl-5">
+          <div class="flex flex-col items-center text-accent-400 leading-none">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m0 0l-6-6m6 6l6-6M12 20V4m0 0l-6 6m6-6l6 6"/></svg>
+          </div>
+          <div class="text-xs text-gray-400">
+            stdio &nbsp;·&nbsp; MCP tool call (in) &nbsp;·&nbsp; tool result (out)
+          </div>
+        </div>
+
+        <!-- Node 2: MCP server -->
+        <div class="rounded-xl border border-yellow-500/40 bg-yellow-500/[0.08] px-5 py-4">
+          <div class="text-[10px] uppercase tracking-wider text-yellow-400 mb-1">Loaded by CC via .mcp.json</div>
+          <div class="font-medium text-gray-100">mcp/dist/server.js</div>
+          <div class="text-xs text-gray-400 mt-1">POSTs <span class="mono">/enqueue</span> with action+args, long-polls <span class="mono">/poll/:cmd_id</span> for up to 30s</div>
+        </div>
+
+        <!-- Hop: MCP ↔ relay -->
+        <div class="flex items-center gap-3 pl-5">
+          <div class="flex flex-col items-center text-accent-400 leading-none">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m0 0l-6-6m6 6l6-6M12 20V4m0 0l-6 6m6-6l6 6"/></svg>
+          </div>
+          <div class="text-xs text-gray-400">
+            HTTP &nbsp;·&nbsp; <span class="text-accent-400 mono">Bearer POSTER_TOKEN</span> &nbsp;·&nbsp; loopback by default
+          </div>
+        </div>
+
+        <!-- Node 3: relay -->
+        <div class="rounded-xl border border-green-500/40 bg-green-500/[0.08] px-5 py-4">
+          <div class="text-[10px] uppercase tracking-wider text-green-400 mb-1">Self-hosted (Node or docker)</div>
+          <div class="font-medium text-gray-100">relay/ — HTTP + WS + sqlite audit log</div>
+          <div class="text-xs text-gray-400 mt-1">matches command to a registered browser (by <span class="mono">target</span> id or <span class="mono">tag</span>), pushes via WS, stores result for the poller</div>
+        </div>
+
+        <!-- Hop: relay ↔ extension -->
+        <div class="flex items-center gap-3 pl-5">
+          <div class="flex flex-col items-center text-accent-400 leading-none">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m0 0l-6-6m6 6l6-6M12 20V4m0 0l-6 6m6-6l6 6"/></svg>
+          </div>
+          <div class="text-xs text-gray-400">
+            WebSocket &nbsp;·&nbsp; <span class="text-accent-400 mono">?token=PULLER_TOKEN</span> &nbsp;·&nbsp; register · heartbeat · cmd · result
+          </div>
+        </div>
+
+        <!-- Node 4: extension -->
+        <div class="rounded-xl border border-mauve-500/40 bg-mauve-500/[0.08] px-5 py-4">
+          <div class="text-[10px] uppercase tracking-wider text-mauve-400 mb-1">Manifest v3 — any Chromium browser</div>
+          <div class="font-medium text-gray-100">extension/ — service worker + popup + options</div>
+          <div class="text-xs text-gray-400 mt-1">runs the action against the active tab; prompts via <span class="mono">chrome.notifications</span> first if the heuristic flags it as destructive</div>
+        </div>
+
+      </div>
+
+      <p class="mt-6 text-center text-xs text-gray-500">
+        The extension pulls — it doesn't open a port. Nothing in your
+        browser is reachable from outside. The relay can stay bound to
+        <span class="mono text-accent-400">127.0.0.1</span> and still drive
+        a browser that's behind any NAT.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================== WHY -->
+<section class="py-20 md:py-28 hero-bg">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="text-center mb-14">
+      <h2 class="text-3xl md:text-4xl font-bold">Why you'd want this</h2>
+      <p class="mt-3 text-gray-400 text-lg">When a fresh headless browser isn't what you want.</p>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+
+      <div class="text-center">
+        <div class="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-accent-500/10 border border-accent-500/30 text-accent-400 mb-4">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zM5 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/>
+          </svg>
+        </div>
+        <h3 class="text-xl font-semibold mb-2">Your sessions, your cookies</h3>
+        <p class="text-gray-400 leading-relaxed">It's the browser you're already logged into. GitHub, AWS console, internal dashboards, Gmail, anything behind SSO. Claude works with the same sessions you do — no re-auth, no cookie copy, no service-account workaround.</p>
+      </div>
+
+      <div class="text-center">
+        <div class="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-mauve-500/10 border border-mauve-500/30 text-mauve-400 mb-4">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20z"/>
+          </svg>
+        </div>
+        <h3 class="text-xl font-semibold mb-2">No CDP, no debug port</h3>
+        <p class="text-gray-400 leading-relaxed">Nothing in your browser needs to listen on a port. The extension pulls work from the relay over an outbound WS. Works behind NAT, works on machines you'd rather not poke holes in, works without restarting Chrome with debug flags.</p>
+      </div>
+
+      <div class="text-center">
+        <div class="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 mb-4">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="4" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="4" width="7" height="7" rx="1.5"/>
+            <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+          </svg>
+        </div>
+        <h3 class="text-xl font-semibold mb-2">Multiple browsers, tag-routed</h3>
+        <p class="text-gray-400 leading-relaxed">Office Chrome, home Brave, a VM's Edge — all register against the same relay. Address them by id (<span class="mono text-accent-400">target: "office"</span>) or by tag (<span class="mono text-accent-400">tag: "reddit"</span>, first match wins). One CC session, many surfaces.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================== FEATURES GRID -->
+<section id="features" class="py-20 md:py-28 bg-ink-900 border-y border-white/5">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="text-center mb-14">
+      <h2 class="text-3xl md:text-4xl font-bold">What's in the box</h2>
+      <p class="mt-3 text-gray-400 text-lg">A walking-skeleton POC — minimum viable surface, full pipe end-to-end.</p>
+    </div>
+
+    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+      <div class="feature-card rounded-xl p-6">
+        <div class="w-10 h-10 rounded-lg bg-accent-500/15 text-accent-400 flex items-center justify-center mb-4">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">Seven MCP tools, day one</h3>
+        <p class="text-gray-400 text-sm leading-relaxed"><span class="mono">list_browsers</span>, <span class="mono">screenshot</span>, <span class="mono">navigate</span>, <span class="mono">new_tab</span>, <span class="mono">click</span>, <span class="mono">fill</span>, <span class="mono">query</span>. Enough to inspect, interact, and report — Claude takes it from there.</p>
+      </div>
+
+      <div class="feature-card rounded-xl p-6">
+        <div class="w-10 h-10 rounded-lg bg-mauve-500/15 text-mauve-400 flex items-center justify-center mb-4">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">Two-token split auth</h3>
+        <p class="text-gray-400 text-sm leading-relaxed">POSTER for the MCP (writes), PULLER for the extension (reads). A leak of one doesn't grant the other direction. Static bearer for the POC — simple, auditable, rotatable from a single env file.</p>
+      </div>
+
+      <div class="feature-card rounded-xl p-6">
+        <div class="w-10 h-10 rounded-lg bg-yellow-500/15 text-yellow-400 flex items-center justify-center mb-4">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4a2 2 0 00-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">Destructive-action prompt</h3>
+        <p class="text-gray-400 text-sm leading-relaxed">Click selectors that look like submit / post / send, or fill on password fields, trigger a Chrome notification with Allow / Deny buttons. Default-deny after 10s. No double-checking your auth-token field after the fact.</p>
+      </div>
+
+      <div class="feature-card rounded-xl p-6">
+        <div class="w-10 h-10 rounded-lg bg-green-500/15 text-green-400 flex items-center justify-center mb-4">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">Sqlite audit log</h3>
+        <p class="text-gray-400 text-sm leading-relaxed">Every register / cmd / result lands in <span class="mono">relay/data/relay.sqlite</span> with a timestamp. Grep, join, replay — your call. No external service, no telemetry leaving the box.</p>
+      </div>
+
+      <div class="feature-card rounded-xl p-6">
+        <div class="w-10 h-10 rounded-lg bg-accent-500/15 text-accent-400 flex items-center justify-center mb-4">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">Popup with kill switch</h3>
+        <p class="text-gray-400 text-sm leading-relaxed">Toolbar icon → status (connected? which relay?), the last 50 audit entries, and a single big disconnect button. The extension stops accepting work the moment you flip it.</p>
+      </div>
+
+      <div class="feature-card rounded-xl p-6">
+        <div class="w-10 h-10 rounded-lg bg-mauve-500/15 text-mauve-400 flex items-center justify-center mb-4">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">Headless e2e test</h3>
+        <p class="text-gray-400 text-sm leading-relaxed">Puppeteer boots the relay, launches Chromium with the unpacked extension, seeds storage via the SW worker target, exercises the full pipe — screenshot, navigate, query — in under five seconds.</p>
+      </div>
+
+      <div class="feature-card rounded-xl p-6">
+        <div class="w-10 h-10 rounded-lg bg-green-500/15 text-green-400 flex items-center justify-center mb-4">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">Docker / podman compose</h3>
+        <p class="text-gray-400 text-sm leading-relaxed">Relay ships with a Dockerfile + compose file that works under both <span class="mono">docker compose</span> and <span class="mono">podman-compose</span>. Single shared <span class="mono">.env</span> at repo root drives the container, the host-mode relay, and the MCP — same config, same secrets.</p>
+      </div>
+
+      <div class="feature-card rounded-xl p-6">
+        <div class="w-10 h-10 rounded-lg bg-yellow-500/15 text-yellow-400 flex items-center justify-center mb-4">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.36-1.85M17 20H7m10 0v-2c0-.65-.13-1.26-.36-1.81M7 20H2v-2a3 3 0 015.36-1.85M7 20v-2c0-.65.13-1.26.36-1.81M12 14a4 4 0 100-8 4 4 0 000 8z"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">Multi-browser registry</h3>
+        <p class="text-gray-400 text-sm leading-relaxed">Each browser self-registers with an id + tags on connect, and pings a heartbeat every 20s. <span class="mono">list_browsers</span> tells Claude who's online; <span class="mono">target</span> / <span class="mono">tag</span> picks where a command runs.</p>
+      </div>
+
+      <div class="feature-card rounded-xl p-6">
+        <div class="w-10 h-10 rounded-lg bg-accent-500/15 text-accent-400 flex items-center justify-center mb-4">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">Single .env, three components</h3>
+        <p class="text-gray-400 text-sm leading-relaxed">Relay, MCP, and docker-compose all read the same <span class="mono">.env</span> at repo root via <span class="mono">--env-file-if-exists</span>. Edit once, applies everywhere — no parallel copies of <span class="mono">POSTER_TOKEN</span> to keep in sync.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================== COMPARE -->
+<section id="compare" class="py-20 md:py-28 bg-ink-900">
+  <div class="max-w-5xl mx-auto px-6">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl md:text-4xl font-bold">How it compares</h2>
+      <p class="mt-3 text-gray-400 text-lg max-w-3xl mx-auto">
+        Other browser-automation surfaces for Claude Code spawn their own
+        browser. That's the right call for clean-room scraping. It's the
+        wrong call when the browser <em>is</em> the workspace — the
+        already-logged-in tabs you've got open right now.
+      </p>
+    </div>
+
+    <!-- Desktop: full table -->
+    <div class="hidden md:block rounded-xl border border-white/10 overflow-x-auto">
+      <table class="w-full text-sm min-w-[820px]">
+        <thead class="bg-white/5">
+          <tr class="text-left align-top">
+            <th class="px-3 py-3 font-medium text-gray-300">Capability</th>
+            <th class="px-3 py-3 font-semibold winner-col">
+              <a href="https://github.com/arikw/rx-browser-bridge-mcp" class="text-accent-400 hover:underline">rx-browser-bridge</a>
+              <div class="text-[10px] font-normal text-gray-500 mt-0.5">(this project)</div>
+            </th>
+            <th class="px-3 py-3 font-medium text-gray-300">
+              <a href="https://github.com/ChromeDevTools/chrome-devtools-mcp" class="hover:underline">chrome-devtools-mcp</a>
+            </th>
+            <th class="px-3 py-3 font-medium text-gray-300">
+              <a href="https://github.com/microsoft/playwright-mcp" class="hover:underline">playwright-mcp</a>
+            </th>
+            <th class="px-3 py-3 font-medium text-gray-300">
+              <a href="https://github.com/modelcontextprotocol/servers" class="hover:underline">puppeteer-mcp</a>
+            </th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-white/5">
+          <tr>
+            <td class="px-3 py-3 text-gray-300">Drives your already-open browser</td>
+            <td class="px-3 py-3 winner-col text-green-400">yes — via MV3 extension</td>
+            <td class="px-3 py-3 text-yellow-400/80">only if launched with <span class="mono">--remote-debugging-port</span></td>
+            <td class="px-3 py-3 text-red-400/80">no — spawns its own</td>
+            <td class="px-3 py-3 text-red-400/80">no — spawns its own</td>
+          </tr>
+          <tr>
+            <td class="px-3 py-3 text-gray-300">Reuses your real session cookies / SSO</td>
+            <td class="px-3 py-3 winner-col text-green-400">yes (it <em>is</em> your profile)</td>
+            <td class="px-3 py-3 text-yellow-400/80">yes if you point at your profile dir</td>
+            <td class="px-3 py-3 text-yellow-400/80">requires storageState export</td>
+            <td class="px-3 py-3 text-yellow-400/80">requires manual cookie injection</td>
+          </tr>
+          <tr>
+            <td class="px-3 py-3 text-gray-300">Browser exposes no inbound port</td>
+            <td class="px-3 py-3 winner-col text-green-400">yes — outbound WS only</td>
+            <td class="px-3 py-3 text-red-400/80">no — CDP debug port required</td>
+            <td class="px-3 py-3 text-green-400">n/a (own process)</td>
+            <td class="px-3 py-3 text-green-400">n/a (own process)</td>
+          </tr>
+          <tr>
+            <td class="px-3 py-3 text-gray-300">Multi-browser, tag-routed targeting</td>
+            <td class="px-3 py-3 winner-col text-green-400">yes (id + tag, first-match-online)</td>
+            <td class="px-3 py-3 text-red-400/80">single attach</td>
+            <td class="px-3 py-3 text-red-400/80">single instance</td>
+            <td class="px-3 py-3 text-red-400/80">single instance</td>
+          </tr>
+          <tr>
+            <td class="px-3 py-3 text-gray-300">Built-in destructive-action confirmation</td>
+            <td class="px-3 py-3 winner-col text-green-400">heuristic + chrome.notifications</td>
+            <td class="px-3 py-3 text-red-400/80">no</td>
+            <td class="px-3 py-3 text-red-400/80">no</td>
+            <td class="px-3 py-3 text-red-400/80">no</td>
+          </tr>
+          <tr>
+            <td class="px-3 py-3 text-gray-300">Audit log of every action</td>
+            <td class="px-3 py-3 winner-col text-green-400">sqlite, on by default</td>
+            <td class="px-3 py-3 text-red-400/80">no</td>
+            <td class="px-3 py-3 text-red-400/80">no</td>
+            <td class="px-3 py-3 text-red-400/80">no</td>
+          </tr>
+          <tr>
+            <td class="px-3 py-3 text-gray-300">Cross-machine deploy (browser elsewhere)</td>
+            <td class="px-3 py-3 winner-col text-green-400">extension pulls from any reachable relay</td>
+            <td class="px-3 py-3 text-yellow-400/80">requires CDP port reachable from CC</td>
+            <td class="px-3 py-3 text-red-400/80">in-process only</td>
+            <td class="px-3 py-3 text-red-400/80">in-process only</td>
+          </tr>
+          <tr>
+            <td class="px-3 py-3 text-gray-300">Full DevTools surface (network, perf, console)</td>
+            <td class="px-3 py-3 text-red-400/80">no — extension APIs only</td>
+            <td class="px-3 py-3 text-green-400">yes</td>
+            <td class="px-3 py-3 text-green-400">yes</td>
+            <td class="px-3 py-3 text-green-400">yes</td>
+          </tr>
+          <tr>
+            <td class="px-3 py-3 text-gray-300">Accessibility-tree based selectors</td>
+            <td class="px-3 py-3 text-red-400/80">no — CSS selectors only</td>
+            <td class="px-3 py-3 text-green-400">yes</td>
+            <td class="px-3 py-3 text-green-400">yes</td>
+            <td class="px-3 py-3 text-yellow-400/80">partial</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Mobile: stacked card per capability -->
+    <div class="md:hidden space-y-4">
+
+      <div class="rounded-xl border border-white/10 bg-ink-800/40 overflow-hidden">
+        <div class="bg-white/5 px-4 py-2.5 text-sm font-medium text-gray-200">Drives your already-open browser</div>
+        <div class="divide-y divide-white/5 text-sm">
+          <div class="px-4 py-2.5 flex justify-between gap-3 winner-col">
+            <span class="text-accent-400 font-medium">rx-browser-bridge</span>
+            <span class="text-right text-green-400">yes — via MV3 extension</span>
+          </div>
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">chrome-devtools-mcp</span>
+            <span class="text-right text-yellow-400/80">only with <span class="mono">--remote-debugging-port</span></span>
+          </div>
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">playwright-mcp</span>
+            <span class="text-right text-red-400/80">no</span>
+          </div>
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">puppeteer-mcp</span>
+            <span class="text-right text-red-400/80">no</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-white/10 bg-ink-800/40 overflow-hidden">
+        <div class="bg-white/5 px-4 py-2.5 text-sm font-medium text-gray-200">Reuses your real session cookies / SSO</div>
+        <div class="divide-y divide-white/5 text-sm">
+          <div class="px-4 py-2.5 flex justify-between gap-3 winner-col">
+            <span class="text-accent-400 font-medium">rx-browser-bridge</span>
+            <span class="text-right text-green-400">yes</span>
+          </div>
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">chrome-devtools-mcp</span>
+            <span class="text-right text-yellow-400/80">if pointed at profile dir</span>
+          </div>
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">playwright-mcp</span>
+            <span class="text-right text-yellow-400/80">requires storageState export</span>
+          </div>
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">puppeteer-mcp</span>
+            <span class="text-right text-yellow-400/80">requires cookie injection</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-white/10 bg-ink-800/40 overflow-hidden">
+        <div class="bg-white/5 px-4 py-2.5 text-sm font-medium text-gray-200">Browser exposes no inbound port</div>
+        <div class="divide-y divide-white/5 text-sm">
+          <div class="px-4 py-2.5 flex justify-between gap-3 winner-col">
+            <span class="text-accent-400 font-medium">rx-browser-bridge</span>
+            <span class="text-right text-green-400">yes — outbound WS only</span>
+          </div>
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">chrome-devtools-mcp</span>
+            <span class="text-right text-red-400/80">no — CDP debug port</span>
+          </div>
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">playwright-mcp</span>
+            <span class="text-right text-green-400">n/a</span>
+          </div>
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">puppeteer-mcp</span>
+            <span class="text-right text-green-400">n/a</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-white/10 bg-ink-800/40 overflow-hidden">
+        <div class="bg-white/5 px-4 py-2.5 text-sm font-medium text-gray-200">Multi-browser, tag-routed</div>
+        <div class="divide-y divide-white/5 text-sm">
+          <div class="px-4 py-2.5 flex justify-between gap-3 winner-col">
+            <span class="text-accent-400 font-medium">rx-browser-bridge</span>
+            <span class="text-right text-green-400">yes</span>
+          </div>
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">chrome-devtools-mcp</span>
+            <span class="text-right text-red-400/80">single attach</span>
+          </div>
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">playwright-mcp</span>
+            <span class="text-right text-red-400/80">single instance</span>
+          </div>
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">puppeteer-mcp</span>
+            <span class="text-right text-red-400/80">single instance</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-white/10 bg-ink-800/40 overflow-hidden">
+        <div class="bg-white/5 px-4 py-2.5 text-sm font-medium text-gray-200">Destructive-action confirmation</div>
+        <div class="divide-y divide-white/5 text-sm">
+          <div class="px-4 py-2.5 flex justify-between gap-3 winner-col">
+            <span class="text-accent-400 font-medium">rx-browser-bridge</span>
+            <span class="text-right text-green-400">heuristic + notification</span>
+          </div>
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">chrome-devtools-mcp</span>
+            <span class="text-right text-red-400/80">no</span>
+          </div>
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">playwright-mcp</span>
+            <span class="text-right text-red-400/80">no</span>
+          </div>
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">puppeteer-mcp</span>
+            <span class="text-right text-red-400/80">no</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-white/10 bg-ink-800/40 overflow-hidden">
+        <div class="bg-white/5 px-4 py-2.5 text-sm font-medium text-gray-200">Full DevTools surface</div>
+        <div class="divide-y divide-white/5 text-sm">
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">rx-browser-bridge</span>
+            <span class="text-right text-red-400/80">no — extension APIs only</span>
+          </div>
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">chrome-devtools-mcp</span>
+            <span class="text-right text-green-400">yes</span>
+          </div>
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">playwright-mcp</span>
+            <span class="text-right text-green-400">yes</span>
+          </div>
+          <div class="px-4 py-2.5 flex justify-between gap-3">
+            <span class="text-gray-500">puppeteer-mcp</span>
+            <span class="text-right text-green-400">yes</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="mt-8 max-w-3xl mx-auto rounded-xl border border-white/10 bg-ink-800/30 p-5 text-sm text-gray-400 leading-relaxed">
+      <div class="text-xs uppercase tracking-widest text-gray-500 mb-2">When to reach for which</div>
+      <p>
+        <span class="text-gray-300">Use Playwright / Puppeteer MCP</span>
+        when you want a clean-room browser per task — scraping, screenshot
+        regression, no shared state. <span class="text-gray-300">Use
+        chrome-devtools-mcp</span> when you need the full DevTools surface
+        (network panel, performance traces, console). <span class="text-gray-300">Use
+        rx-browser-bridge</span> when the value is in <em>this exact
+        browser, this exact session</em>: dashboards behind SSO, a CI tab
+        you already opened, an admin UI that took a security key to log
+        into.
+      </p>
+      <p class="mt-3">
+        They compose. Nothing stops you from loading all three MCPs — the
+        right tool surface for the job is the one Claude picks per call.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================== FAQ -->
+<section id="faq" class="py-20 md:py-28 hero-bg">
+  <div class="max-w-3xl mx-auto px-6">
+    <h2 class="text-3xl md:text-4xl font-bold text-center mb-10">Questions</h2>
+
+    <div class="space-y-3">
+      <details class="bg-ink-900/60 border border-white/10 rounded-xl px-5 py-4">
+        <summary class="font-medium flex items-center justify-between">
+          <span>Do I need to expose anything on the public internet?</span>
+          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </summary>
+        <p class="mt-3 text-gray-400 text-sm leading-relaxed">No, not for the single-machine default. The relay binds to <span class="mono">127.0.0.1</span>; the MCP talks to it over loopback; the extension also connects to <span class="mono">127.0.0.1</span> if Chrome is on the same box. Cross-machine deploys — driving an office browser from a home laptop, say — need the relay reachable by both ends, which you'd front with TLS via Caddy, Cloudflare Tunnel, or Tailscale Funnel.</p>
+      </details>
+
+      <details class="bg-ink-900/60 border border-white/10 rounded-xl px-5 py-4">
+        <summary class="font-medium flex items-center justify-between">
+          <span>What stops Claude from clicking "delete account" on me?</span>
+          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </summary>
+        <p class="mt-3 text-gray-400 text-sm leading-relaxed">Two layers. (1) A heuristic in the extension flags clicks against submit/post/send selectors and fills against password fields as destructive — those trigger a Chrome notification with Allow / Deny buttons that default-deny after 10s. (2) The kill-switch in the popup disconnects the extension entirely. Neither is a substitute for not running this against a session that matters. The POC defaults intentionally favor speed of iteration over hardened policy — per-domain trust toggles are on the roadmap.</p>
+      </details>
+
+      <details class="bg-ink-900/60 border border-white/10 rounded-xl px-5 py-4">
+        <summary class="font-medium flex items-center justify-between">
+          <span>Why an extension, not just CDP?</span>
+          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </summary>
+        <p class="mt-3 text-gray-400 text-sm leading-relaxed">CDP needs Chrome started with <span class="mono">--remote-debugging-port</span>, an open TCP port on your machine, and locks the browser into a mode where any local process can drive it. An extension is just a long-running script the user explicitly loaded. It pulls work over an outbound WS — no port, no flag, no full-takeover surface. The trade-off is the extension API is narrower than CDP — no network interception, no performance traces.</p>
+      </details>
+
+      <details class="bg-ink-900/60 border border-white/10 rounded-xl px-5 py-4">
+        <summary class="font-medium flex items-center justify-between">
+          <span>Can I drive a background tab?</span>
+          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </summary>
+        <p class="mt-3 text-gray-400 text-sm leading-relaxed">Not yet — every command runs against the active tab in the active window. URL-matching and window-selector targeting is on the roadmap; the registration protocol already passes <span class="mono">current_url</span> so the routing layer has what it needs.</p>
+      </details>
+
+      <details class="bg-ink-900/60 border border-white/10 rounded-xl px-5 py-4">
+        <summary class="font-medium flex items-center justify-between">
+          <span>Firefox?</span>
+          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </summary>
+        <p class="mt-3 text-gray-400 text-sm leading-relaxed">A Firefox MV3 manifest variant is on the roadmap. The bulk of <span class="mono">extension/background.js</span> uses standard <span class="mono">chrome.*</span> APIs Firefox supports via its <span class="mono">browser.*</span> namespace, so the diff should be small.</p>
+      </details>
+
+      <details class="bg-ink-900/60 border border-white/10 rounded-xl px-5 py-4">
+        <summary class="font-medium flex items-center justify-between">
+          <span>Is there a Claude Code plugin / marketplace version?</span>
+          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </summary>
+        <p class="mt-3 text-gray-400 text-sm leading-relaxed">There's a <span class="mono">mcp/.claude-plugin/plugin.json</span> in the tree as the start of one, but it isn't published to a marketplace yet. For now: clone, build, point at it via <span class="mono">.mcp.json</span>. <span class="mono">claude plugin install rx-browser-bridge@arikw</span>-style packaging is on the roadmap.</p>
+      </details>
+
+      <details class="bg-ink-900/60 border border-white/10 rounded-xl px-5 py-4">
+        <summary class="font-medium flex items-center justify-between">
+          <span>What about TLS?</span>
+          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </summary>
+        <p class="mt-3 text-gray-400 text-sm leading-relaxed">The relay is plain HTTP + WS. For loopback that's fine. For cross-network deploys, front it with a TLS-terminating reverse proxy — Caddy, Cloudflare Tunnel, Tailscale Funnel. A first-party TLS sidecar service in the compose file is on the roadmap.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================== FOOTER CTA -->
+<footer class="border-t border-white/5 bg-ink-900 py-16">
+  <div class="max-w-5xl mx-auto px-6 text-center">
+    <h2 class="text-2xl md:text-3xl font-bold mb-3">Ready to drive your browser from Claude?</h2>
+    <p class="text-gray-400 mb-8 max-w-2xl mx-auto">Three components, one <span class="mono">.env</span>, an unpacked extension. MIT licensed, no telemetry, no third-party service in the loop — your relay, your browser, your audit log.</p>
+
+    <div class="flex flex-wrap justify-center gap-3 mb-12">
+      <a href="https://github.com/arikw/rx-browser-bridge-mcp"
+         class="inline-flex items-center gap-2 bg-accent-500 hover:bg-accent-600 text-white px-5 py-3 rounded-lg font-medium transition shadow-lg shadow-accent-500/20">
+        Get started on GitHub
+      </a>
+      <a href="https://github.com/arikw/rx-browser-bridge-mcp/issues"
+         class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-5 py-3 rounded-lg font-medium transition">
+        Report an issue
+      </a>
+      <a href="https://github.com/arikw/rx-browser-bridge-mcp#readme"
+         class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-5 py-3 rounded-lg font-medium transition">
+        Read the docs
+      </a>
+    </div>
+
+    <div class="text-sm text-gray-500 space-y-1">
+      <div>MIT licensed · Built by <a href="https://github.com/arikw" class="text-accent-400 hover:underline">@arikw</a></div>
+      <div class="text-xs text-gray-600">Claude Code is a trademark of Anthropic. Chrome, Edge, and Brave are trademarks of their respective owners.</div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  function copyInstall(btn) {
+    const snippet = document.getElementById('install-snippet').innerText;
+    navigator.clipboard.writeText(snippet).then(() => {
+      btn.textContent = '✓ copied';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'copy';
+        btn.classList.remove('copied');
+      }, 1800);
+    }).catch(() => {
+      btn.textContent = 'select+copy';
+      setTimeout(() => { btn.textContent = 'copy'; }, 1800);
+    });
+  }
+</script>
+
+</body>
+</html>
