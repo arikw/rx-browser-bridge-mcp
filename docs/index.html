@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RX Browser Bridge — drive any browser tab from Claude Code</title>
-<meta name="description" content="A Claude Code MCP server + MV3 extension that lets your live coding agent drive any browser tab you already have open. Your logins, your cookies, your extensions — Claude just clicks through them.">
+<title>RX Browser Bridge — drive any browser tab from your AI coding agent</title>
+<meta name="description" content="An MCP server + MV3 extension that lets your AI coding agent drive any browser tab you already have open. Your logins, your cookies, your extensions. Works with any MCP client — Claude Code, Cursor, Cline, Zed, Continue, Goose, Windsurf.">
 <meta property="og:title" content="RX Browser Bridge">
-<meta property="og:description" content="Drive any browser tab from your live Claude Code session. Your real browser, your real sessions. Open source.">
+<meta property="og:description" content="Drive any browser tab from your AI coding agent — through the real browser you already have open. Any MCP client. Open source.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://arikw.github.io/rx-browser-bridge-mcp/">
 <meta name="twitter:card" content="summary_large_image">
@@ -219,7 +219,7 @@
     <div class="min-w-0">
       <div class="inline-flex items-center gap-2 bg-mauve-500/10 border border-mauve-500/30 text-mauve-400 text-xs px-3 py-1 rounded-full mb-6">
         <span class="w-1.5 h-1.5 rounded-full bg-mauve-400 animate-pulse"></span>
-        Walking-skeleton POC · v0.1.0
+        MCP server · self-hosted · MIT
       </div>
 
       <h1 class="text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight leading-[1.1]">
@@ -228,7 +228,7 @@
       </h1>
 
       <p class="mt-5 md:mt-6 text-base sm:text-lg md:text-xl text-gray-300 leading-relaxed">
-        Drive any browser tab from a live Claude Code session — through the
+        Drive any browser tab from your AI coding agent — through the
         browser you already have open. Your logins, your cookies, your
         extensions. No fresh Playwright instance. No CDP debug port. No
         re-auth dance.
@@ -249,10 +249,12 @@
 <span class="text-accent-400">$</span> git clone https://github.com/arikw/rx-browser-bridge-mcp
 <span class="text-accent-400">$</span> cd rx-browser-bridge-mcp &amp;&amp; npm install &amp;&amp; npm -w mcp run build
 
-<span class="text-gray-500"># 2. boot the relay (or: docker compose up)</span>
+<span class="text-gray-500"># 2. boot the relay (npm, docker compose, or podman-compose)</span>
 <span class="text-accent-400">$</span> npm -w relay run dev
 
-<span class="text-gray-500"># 3. load extension/ unpacked into Chrome/Edge/Brave, then:</span>
+<span class="text-gray-500"># 3. load extension/ unpacked into Chrome / Edge / Brave</span>
+
+<span class="text-gray-500"># 4. launch your MCP client — Claude Code shown; any MCP client works</span>
 <span class="text-accent-400">$</span> claude --mcp-config ./.mcp.json</pre>
           </div>
         </div>
@@ -289,13 +291,13 @@
     <!-- right: dual mockup (terminal + browser) -->
     <div class="relative flex justify-center items-center md:min-h-[480px] min-w-0">
 
-      <!-- Terminal — CC session driving the browser -->
+      <!-- Terminal — coding-agent session driving the browser -->
       <div class="terminal w-full max-w-md md:float-slow relative z-10">
         <div class="terminal-bar">
           <div class="term-dot bg-red-500/80"></div>
           <div class="term-dot bg-yellow-500/80"></div>
           <div class="term-dot bg-green-500/80"></div>
-          <span class="mono text-xs text-gray-500 ml-2">claude · my-project</span>
+          <span class="mono text-xs text-gray-500 ml-2">agent · my-project</span>
         </div>
         <div class="mono text-xs p-4 text-gray-200 leading-relaxed">
           <div class="text-gray-500">&gt; check if my PR triggered the deploy on the office browser</div>
@@ -362,7 +364,7 @@
           </svg>
         </div>
         <h3 class="font-semibold text-lg mb-2">1. Relay — the meeting point</h3>
-        <p class="text-gray-400 text-sm leading-relaxed">A small Node HTTP+WS server. Claude Code POSTs commands to it; the browser extension pulls them off via a persistent WebSocket. Two static bearer tokens — POSTER (writes) and PULLER (reads) — so a leak of one doesn't grant the other. Sqlite audit log on every action.</p>
+        <p class="text-gray-400 text-sm leading-relaxed">A small Node HTTP+WS server. The MCP POSTs commands to it; the browser extension pulls them off via a persistent WebSocket. Two static bearer tokens — POSTER (writes) and PULLER (reads) — so a leak of one doesn't grant the other. Sqlite audit log on every action.</p>
       </div>
       <div class="feature-card rounded-xl p-6">
         <div class="w-10 h-10 rounded-lg bg-mauve-500/15 text-mauve-400 flex items-center justify-center mb-3">
@@ -370,8 +372,8 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 7h6l2 3 2-3h8M3 17h6l2-3 2 3h8"/>
           </svg>
         </div>
-        <h3 class="font-semibold text-lg mb-2">2. MCP server — Claude's tools</h3>
-        <p class="text-gray-400 text-sm leading-relaxed">A stdio MCP server loaded by Claude Code via <span class="mono text-accent-400">.mcp.json</span>. Exposes <span class="mono text-accent-400">list_browsers</span>, <span class="mono text-accent-400">screenshot</span>, <span class="mono text-accent-400">navigate</span>, <span class="mono text-accent-400">new_tab</span>, <span class="mono text-accent-400">click</span>, <span class="mono text-accent-400">fill</span>, <span class="mono text-accent-400">query</span>. Each tool call enqueues on the relay and long-polls for the result.</p>
+        <h3 class="font-semibold text-lg mb-2">2. MCP server — your agent's tools</h3>
+        <p class="text-gray-400 text-sm leading-relaxed">A standard stdio MCP server. Loaded by any MCP-aware coding agent — Claude Code via <span class="mono text-accent-400">.mcp.json</span>, Cursor / Cline / Zed / Continue / Goose / Windsurf via their own config. Exposes <span class="mono text-accent-400">list_browsers</span>, <span class="mono text-accent-400">screenshot</span>, <span class="mono text-accent-400">navigate</span>, <span class="mono text-accent-400">new_tab</span>, <span class="mono text-accent-400">click</span>, <span class="mono text-accent-400">fill</span>, <span class="mono text-accent-400">query</span>.</p>
       </div>
       <div class="feature-card rounded-xl p-6">
         <div class="w-10 h-10 rounded-lg bg-yellow-500/15 text-yellow-400 flex items-center justify-center mb-3">
@@ -390,14 +392,14 @@
 
       <div class="space-y-2">
 
-        <!-- Node 1: CC TUI -->
+        <!-- Node 1: agent -->
         <div class="rounded-xl border border-accent-500/40 bg-accent-500/[0.08] px-5 py-4">
-          <div class="text-[10px] uppercase tracking-wider text-accent-400 mb-1">Your terminal</div>
-          <div class="font-medium text-gray-100">Live Claude Code TUI session</div>
-          <div class="text-xs text-gray-400 mt-1">calls one of the MCP tools (<span class="mono">screenshot</span>, <span class="mono">click</span>, <span class="mono">fill</span>, …) with optional <span class="mono">target</span> or <span class="mono">tag</span></div>
+          <div class="text-[10px] uppercase tracking-wider text-accent-400 mb-1">Your terminal / IDE</div>
+          <div class="font-medium text-gray-100">Any MCP-aware coding agent</div>
+          <div class="text-xs text-gray-400 mt-1">Claude Code, Cursor, Cline, Zed, Continue, Goose, Windsurf — calls one of the MCP tools (<span class="mono">screenshot</span>, <span class="mono">click</span>, <span class="mono">fill</span>, …) with optional <span class="mono">target</span> or <span class="mono">tag</span></div>
         </div>
 
-        <!-- Hop: TUI ↔ MCP -->
+        <!-- Hop: agent ↔ MCP -->
         <div class="flex items-center gap-3 pl-5">
           <div class="flex flex-col items-center text-accent-400 leading-none">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m0 0l-6-6m6 6l6-6M12 20V4m0 0l-6 6m6-6l6 6"/></svg>
@@ -409,7 +411,7 @@
 
         <!-- Node 2: MCP server -->
         <div class="rounded-xl border border-yellow-500/40 bg-yellow-500/[0.08] px-5 py-4">
-          <div class="text-[10px] uppercase tracking-wider text-yellow-400 mb-1">Loaded by CC via .mcp.json</div>
+          <div class="text-[10px] uppercase tracking-wider text-yellow-400 mb-1">Loaded by your MCP client</div>
           <div class="font-medium text-gray-100">mcp/dist/server.js</div>
           <div class="text-xs text-gray-400 mt-1">POSTs <span class="mono">/enqueue</span> with action+args, long-polls <span class="mono">/poll/:cmd_id</span> for up to 30s</div>
         </div>
@@ -477,7 +479,7 @@
           </svg>
         </div>
         <h3 class="text-xl font-semibold mb-2">Your sessions, your cookies</h3>
-        <p class="text-gray-400 leading-relaxed">It's the browser you're already logged into. GitHub, AWS console, internal dashboards, Gmail, anything behind SSO. Claude works with the same sessions you do — no re-auth, no cookie copy, no service-account workaround.</p>
+        <p class="text-gray-400 leading-relaxed">It's the browser you're already logged into. GitHub, AWS console, internal dashboards, Gmail, anything behind SSO. Your agent works with the same sessions you do — no re-auth, no cookie copy, no service-account workaround.</p>
       </div>
 
       <div class="text-center">
@@ -500,7 +502,7 @@
           </svg>
         </div>
         <h3 class="text-xl font-semibold mb-2">Multiple browsers, tag-routed</h3>
-        <p class="text-gray-400 leading-relaxed">Office Chrome, home Brave, a VM's Edge — all register against the same relay. Address them by id (<span class="mono text-accent-400">target: "office"</span>) or by tag (<span class="mono text-accent-400">tag: "reddit"</span>, first match wins). One CC session, many surfaces.</p>
+        <p class="text-gray-400 leading-relaxed">Office Chrome, home Brave, a VM's Edge — all register against the same relay. Address them by id (<span class="mono text-accent-400">target: "office"</span>) or by tag (<span class="mono text-accent-400">tag: "reddit"</span>, first match wins). One agent session, many surfaces.</p>
       </div>
 
     </div>
@@ -512,7 +514,7 @@
   <div class="max-w-7xl mx-auto px-6">
     <div class="text-center mb-14">
       <h2 class="text-3xl md:text-4xl font-bold">What's in the box</h2>
-      <p class="mt-3 text-gray-400 text-lg">A walking-skeleton POC — minimum viable surface, full pipe end-to-end.</p>
+      <p class="mt-3 text-gray-400 text-lg">Pragmatic surface. The full pipe wired end-to-end, nothing you don't need.</p>
     </div>
 
     <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -521,8 +523,8 @@
         <div class="w-10 h-10 rounded-lg bg-accent-500/15 text-accent-400 flex items-center justify-center mb-4">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
         </div>
-        <h3 class="font-semibold text-lg mb-2">Seven MCP tools, day one</h3>
-        <p class="text-gray-400 text-sm leading-relaxed"><span class="mono">list_browsers</span>, <span class="mono">screenshot</span>, <span class="mono">navigate</span>, <span class="mono">new_tab</span>, <span class="mono">click</span>, <span class="mono">fill</span>, <span class="mono">query</span>. Enough to inspect, interact, and report — Claude takes it from there.</p>
+        <h3 class="font-semibold text-lg mb-2">Seven MCP tools</h3>
+        <p class="text-gray-400 text-sm leading-relaxed"><span class="mono">list_browsers</span>, <span class="mono">screenshot</span>, <span class="mono">navigate</span>, <span class="mono">new_tab</span>, <span class="mono">click</span>, <span class="mono">fill</span>, <span class="mono">query</span>. Enough to inspect, interact, and report — the agent takes it from there.</p>
       </div>
 
       <div class="feature-card rounded-xl p-6">
@@ -530,7 +532,7 @@
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
         </div>
         <h3 class="font-semibold text-lg mb-2">Two-token split auth</h3>
-        <p class="text-gray-400 text-sm leading-relaxed">POSTER for the MCP (writes), PULLER for the extension (reads). A leak of one doesn't grant the other direction. Static bearer for the POC — simple, auditable, rotatable from a single env file.</p>
+        <p class="text-gray-400 text-sm leading-relaxed">POSTER for the MCP (writes), PULLER for the extension (reads). A leak of one doesn't grant the other direction. Static bearer tokens — simple, auditable, rotatable from a single env file.</p>
       </div>
 
       <div class="feature-card rounded-xl p-6">
@@ -578,7 +580,7 @@
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.36-1.85M17 20H7m10 0v-2c0-.65-.13-1.26-.36-1.81M7 20H2v-2a3 3 0 015.36-1.85M7 20v-2c0-.65.13-1.26.36-1.81M12 14a4 4 0 100-8 4 4 0 000 8z"/></svg>
         </div>
         <h3 class="font-semibold text-lg mb-2">Multi-browser registry</h3>
-        <p class="text-gray-400 text-sm leading-relaxed">Each browser self-registers with an id + tags on connect, and pings a heartbeat every 20s. <span class="mono">list_browsers</span> tells Claude who's online; <span class="mono">target</span> / <span class="mono">tag</span> picks where a command runs.</p>
+        <p class="text-gray-400 text-sm leading-relaxed">Each browser self-registers with an id + tags on connect, and pings a heartbeat every 20s. <span class="mono">list_browsers</span> tells the agent who's online; <span class="mono">target</span> / <span class="mono">tag</span> picks where a command runs.</p>
       </div>
 
       <div class="feature-card rounded-xl p-6">
@@ -599,9 +601,9 @@
     <div class="text-center mb-12">
       <h2 class="text-3xl md:text-4xl font-bold">How it compares</h2>
       <p class="mt-3 text-gray-400 text-lg max-w-3xl mx-auto">
-        Other browser-automation surfaces for Claude Code spawn their own
-        browser. That's the right call for clean-room scraping. It's the
-        wrong call when the browser <em>is</em> the workspace — the
+        Other MCP browser-automation servers spawn their own browser.
+        That's the right call for clean-room scraping. It's the wrong
+        call when the browser <em>is</em> the workspace — the
         already-logged-in tabs you've got open right now.
       </p>
     </div>
@@ -847,7 +849,7 @@
       </p>
       <p class="mt-3">
         They compose. Nothing stops you from loading all three MCPs — the
-        right tool surface for the job is the one Claude picks per call.
+        right tool surface for the job is the one the agent picks per call.
       </p>
     </div>
   </div>
@@ -869,10 +871,10 @@
 
       <details class="bg-ink-900/60 border border-white/10 rounded-xl px-5 py-4">
         <summary class="font-medium flex items-center justify-between">
-          <span>What stops Claude from clicking "delete account" on me?</span>
+          <span>What stops the agent from clicking "delete account" on me?</span>
           <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         </summary>
-        <p class="mt-3 text-gray-400 text-sm leading-relaxed">Two layers. (1) A heuristic in the extension flags clicks against submit/post/send selectors and fills against password fields as destructive — those trigger a Chrome notification with Allow / Deny buttons that default-deny after 10s. (2) The kill-switch in the popup disconnects the extension entirely. Neither is a substitute for not running this against a session that matters. The POC defaults intentionally favor speed of iteration over hardened policy — per-domain trust toggles are on the roadmap.</p>
+        <p class="mt-3 text-gray-400 text-sm leading-relaxed">Two layers. (1) A heuristic in the extension flags clicks against submit/post/send selectors and fills against password fields as destructive — those trigger a Chrome notification with Allow / Deny buttons that default-deny after 10s. (2) The kill-switch in the popup disconnects the extension entirely. Neither is a substitute for not running this against a session that matters. The current defaults favor speed of iteration over hardened policy; per-domain trust toggles are on the roadmap.</p>
       </details>
 
       <details class="bg-ink-900/60 border border-white/10 rounded-xl px-5 py-4">
@@ -901,10 +903,10 @@
 
       <details class="bg-ink-900/60 border border-white/10 rounded-xl px-5 py-4">
         <summary class="font-medium flex items-center justify-between">
-          <span>Is there a Claude Code plugin / marketplace version?</span>
+          <span>How do I wire it into my MCP client?</span>
           <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         </summary>
-        <p class="mt-3 text-gray-400 text-sm leading-relaxed">There's a <span class="mono">mcp/.claude-plugin/plugin.json</span> in the tree as the start of one, but it isn't published to a marketplace yet. For now: clone, build, point at it via <span class="mono">.mcp.json</span>. <span class="mono">claude plugin install rx-browser-bridge@arikw</span>-style packaging is on the roadmap.</p>
+        <p class="mt-3 text-gray-400 text-sm leading-relaxed">It's a vanilla <span class="mono">@modelcontextprotocol/sdk</span> stdio server, so any MCP-aware client works. <strong class="text-gray-300">Claude Code</strong> reads <span class="mono">.mcp.json</span> (shipped in the repo). <strong class="text-gray-300">Cursor</strong> uses <span class="mono">~/.cursor/mcp.json</span>. <strong class="text-gray-300">Cline</strong> uses its settings panel. <strong class="text-gray-300">Zed</strong>, <strong class="text-gray-300">Continue</strong>, <strong class="text-gray-300">Goose</strong>, <strong class="text-gray-300">Windsurf</strong> — all support stdio MCPs. Point yours at <span class="mono">node mcp/dist/server.js</span> with <span class="mono">POSTER_TOKEN</span> + <span class="mono">RELAY_URL</span> in the env. A <span class="mono">mcp/.claude-plugin/plugin.json</span> is also in the tree for Claude Code marketplace packaging.</p>
       </details>
 
       <details class="bg-ink-900/60 border border-white/10 rounded-xl px-5 py-4">
@@ -921,7 +923,7 @@
 <!-- ========================================================== FOOTER CTA -->
 <footer class="border-t border-white/5 bg-ink-900 py-16">
   <div class="max-w-5xl mx-auto px-6 text-center">
-    <h2 class="text-2xl md:text-3xl font-bold mb-3">Ready to drive your browser from Claude?</h2>
+    <h2 class="text-2xl md:text-3xl font-bold mb-3">Ready to drive your browser from your agent?</h2>
     <p class="text-gray-400 mb-8 max-w-2xl mx-auto">Three components, one <span class="mono">.env</span>, an unpacked extension. MIT licensed, no telemetry, no third-party service in the loop — your relay, your browser, your audit log.</p>
 
     <div class="flex flex-wrap justify-center gap-3 mb-12">
@@ -941,7 +943,7 @@
 
     <div class="text-sm text-gray-500 space-y-1">
       <div>MIT licensed · Built by <a href="https://github.com/arikw" class="text-accent-400 hover:underline">@arikw</a></div>
-      <div class="text-xs text-gray-600">Claude Code is a trademark of Anthropic. Chrome, Edge, and Brave are trademarks of their respective owners.</div>
+      <div class="text-xs text-gray-600">MCP is the Model Context Protocol. Claude Code, Cursor, Cline, Zed, Continue, Goose, Windsurf, Chrome, Edge, and Brave are trademarks of their respective owners.</div>
     </div>
   </div>
 </footer>
