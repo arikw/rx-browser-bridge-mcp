@@ -16,8 +16,8 @@ the relay).
    - Entrypoint: `relay/src/server.ts`
    - Boot dev: `npm -w relay run dev`
    - Build: `npm -w relay run build` → `relay/dist/server.js`
-   - Container: `relay/Dockerfile` + `relay/docker-compose.yml`
-     (works under both docker and podman-compose).
+   - Container: `relay/Dockerfile` + `relay/compose.yaml`
+     (works under both docker and podman compose).
 
 2. **`mcp/`** — MCP stdio server loaded by CC. Wraps relay HTTP
    endpoints as Claude tools.
@@ -60,7 +60,7 @@ Single `.env` at repo root, shared by all three components. Copy from
 
 - `npm -w relay run dev|start` — via `node --env-file-if-exists=../.env`
 - `mcp/dist/server.js` — via `.mcp.json` `--env-file-if-exists=.env`
-- `relay/docker-compose.yml` — via `env_file: ../.env` (the compose file
+- `relay/compose.yaml` — via `env_file: ../.env` (the compose file
   overrides `DATA_DIR=/data` so the mount path is correct inside the
   container regardless of host value)
 

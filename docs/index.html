@@ -249,26 +249,33 @@
 <span class="text-accent-400">$</span> git clone https://github.com/arikw/rx-browser-bridge-mcp
 <span class="text-accent-400">$</span> cd rx-browser-bridge-mcp &amp;&amp; npm install &amp;&amp; npm -w mcp run build
 
-<span class="text-gray-500"># 2. boot the relay (npm, docker compose, or podman-compose)</span>
+<span class="text-gray-500"># 2. boot the relay (npm, docker compose, or podman compose)</span>
 <span class="text-accent-400">$</span> npm -w relay run dev
 
 <span class="text-gray-500"># 3. load extension/ unpacked into Chrome / Edge / Brave</span>
 
-<span class="text-gray-500"># 4. launch your MCP client — Claude Code shown; any MCP client works</span>
-<span class="text-accent-400">$</span> claude --mcp-config ./.mcp.json</pre>
+<span class="text-gray-500"># 4. register the MCP user-scope (so it loads in every CC session)</span>
+<span class="text-accent-400">$</span> claude mcp add browser-bridge -s user -- \
+    node --env-file-if-exists=$PWD/.env $PWD/mcp/dist/server.js</pre>
           </div>
         </div>
         <button class="copy-btn mono" onclick="copyInstall(this)">copy</button>
       </div>
+
+      <p class="mt-3 text-sm text-gray-400">
+        Snippet shows the shape — see the
+        <a href="https://github.com/arikw/rx-browser-bridge-mcp#install" class="text-accent-400 hover:underline">full install guide</a>
+        for secrets, extension config, and registering with other MCP clients.
+      </p>
 
       <div class="mt-6 flex flex-wrap gap-3">
         <a href="https://github.com/arikw/rx-browser-bridge-mcp"
            class="inline-flex items-center gap-2 bg-accent-500 hover:bg-accent-600 text-white px-5 py-3 rounded-lg font-medium transition shadow-lg shadow-accent-500/20">
           Get the project →
         </a>
-        <a href="https://github.com/arikw/rx-browser-bridge-mcp#readme"
+        <a href="https://github.com/arikw/rx-browser-bridge-mcp#install"
            class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-5 py-3 rounded-lg font-medium transition">
-          Read the docs
+          Install guide
         </a>
       </div>
 
@@ -572,7 +579,7 @@
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
         </div>
         <h3 class="font-semibold text-lg mb-2">Docker / podman compose</h3>
-        <p class="text-gray-400 text-sm leading-relaxed">Relay ships with a Dockerfile + compose file that works under both <span class="mono">docker compose</span> and <span class="mono">podman-compose</span>. Single shared <span class="mono">.env</span> at repo root drives the container, the host-mode relay, and the MCP — same config, same secrets.</p>
+        <p class="text-gray-400 text-sm leading-relaxed">Relay ships with a Dockerfile + compose file that works under both <span class="mono">docker compose</span> and <span class="mono">podman compose</span>. Single shared <span class="mono">.env</span> at repo root drives the container, the host-mode relay, and the MCP — same config, same secrets.</p>
       </div>
 
       <div class="feature-card rounded-xl p-6">

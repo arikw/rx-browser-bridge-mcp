@@ -40,70 +40,142 @@ self-hosted relay + MV3 extension.
   prompt for destructive actions (submit/post/send buttons, password
   fields).
 
-## Quick start (single machine, dev)
+## Install
 
-### 1. Install deps
+Five steps. Once done, the browser tools are available in **every**
+Claude Code session, regardless of which directory you launch from.
+
+The install location is up to you — examples below use
+`~/tools/rx-browser-bridge-mcp`. Adjust the absolute path in step 5 to
+wherever you actually cloned.
+
+### 1. Clone and build
 
 ```bash
-cd /workspace/rx-browser-bridge
+git clone https://github.com/arikw/rx-browser-bridge-mcp ~/tools/rx-browser-bridge-mcp
+cd ~/tools/rx-browser-bridge-mcp
 PUPPETEER_SKIP_DOWNLOAD=true npm install
+npm -w mcp run build      # produces mcp/dist/server.js
 ```
 
-(System chromium at `/usr/bin/chromium` is used for tests — no need for
-puppeteer's bundled binary.)
+(`PUPPETEER_SKIP_DOWNLOAD=true` skips puppeteer's bundled Chromium —
+tests use system chromium at `/usr/bin/chromium`. Drop the flag if you
+don't have one.)
 
-### 2. Boot relay
+### 2. Configure secrets
 
 ```bash
-# Option A — tsx (no build step)
+cp .env.example .env
+# edit .env — set POSTER_TOKEN and PULLER_TOKEN to random values
+# (openssl rand -hex 32 each is a good default)
+```
+
+The same `.env` is read by all three components — relay, MCP server,
+and docker / podman compose. Edit once, applies everywhere.
+
+### 3. Boot the relay
+
+```bash
+# Option A — tsx (no build step, foreground)
 npm -w relay run dev
 
-# Option B — docker / podman
+# Option B — container (backgrounded by compose)
 cd relay
-docker compose up --build      # or: podman-compose up --build
+docker compose up --build       # or: podman compose up --build
 ```
 
 Defaults:
-- listens on `127.0.0.1:3000`
-- `POSTER_TOKEN=dev-poster`, `PULLER_TOKEN=dev-puller`
-- audit log at `./data/relay.sqlite`
+- Listens on `127.0.0.1:3000`
+- Audit log at `relay/data/relay.sqlite` (or `/data/relay.sqlite` inside
+  the container, bind-mounted to `relay/data/` on the host)
 
-### 3. Build MCP server
+### 4. Load the extension into your browser
 
-```bash
-npm -w mcp run build
-```
-
-Produces `mcp/dist/server.js`. `.mcp.json` at repo root points Claude
-Code at it. Launch CC from this directory:
-
-```bash
-cd /workspace/rx-browser-bridge
-claude --mcp-config ./.mcp.json
-```
-
-(Plugin form / marketplace publishing TBD — see Roadmap.)
-
-### 4. Load extension into a Chromium browser
-
-- `chrome://extensions` → enable "Developer mode" → "Load unpacked" →
-  pick `extension/` directory.
-- Open extension Options page:
+- `chrome://extensions` (or your Chromium browser's equivalent) →
+  enable "Developer mode" → "Load unpacked" → pick the `extension/`
+  directory.
+- Open the extension's Options page and fill in:
   - **Relay URL**: `ws://localhost:3000/ws`
-  - **Puller token**: `dev-puller`
+  - **Puller token**: paste `PULLER_TOKEN` from `.env`
   - **Browser id**: friendly slug, e.g. `office`
   - **Tags**: comma-separated, e.g. `reddit, hn`
 
-Toolbar icon click → popup shows connection status + audit log + kill
-switch.
+Click the toolbar icon → popup shows connection status, the last 50
+audit entries, and a kill switch.
 
-### 5. Smoke test inside CC
+### 5. Register the MCP with Claude Code (user-scope)
 
+So the browser tools load in **every** Claude Code session — not just
+when you launch from this project directory — register at user scope.
+The recommended setup points Node at the project's `.env` via an
+absolute path, so you can rotate tokens by editing one file without
+re-registering anything:
+
+```bash
+claude mcp add browser-bridge -s user -- \
+  node --env-file-if-exists=$HOME/tools/rx-browser-bridge-mcp/.env \
+       $HOME/tools/rx-browser-bridge-mcp/mcp/dist/server.js
 ```
-> list_browsers
+
+What this does:
+
+- `-s user` writes the registration into your user config
+  (`~/.claude.json`), so it loads regardless of CWD.
+- `--env-file-if-exists=…/.env` tells Node to load env vars from that
+  absolute path on every launch — `POSTER_TOKEN`, `RELAY_URL`, and the
+  optional `DEFAULT_TARGET` come from there.
+- The trailing `--` separates Claude's flags from the command to spawn.
+
+#### Alternative — env vars baked into the registration
+
+If you'd rather not depend on `.env` (e.g. you want the token in a
+secret manager and pulled in at register-time), pass the values
+directly with `-e`:
+
+```bash
+claude mcp add browser-bridge -s user \
+  -e POSTER_TOKEN=your-token-here \
+  -e RELAY_URL=http://localhost:3000 \
+  -- node $HOME/tools/rx-browser-bridge-mcp/mcp/dist/server.js
+```
+
+The downside: you re-run `claude mcp add` every time you rotate.
+
+#### Verify
+
+```bash
+claude mcp list             # should show 'browser-bridge'
+claude                      # launch from any directory
+> list_browsers             # should return the browser you registered
 > navigate https://reddit.com on browser "office"
 > screenshot
 ```
+
+#### Other MCP clients
+
+The MCP server is a vanilla `@modelcontextprotocol/sdk` stdio server.
+Any MCP-aware client works — point it at
+`node /abs/path/to/mcp/dist/server.js` with `POSTER_TOKEN` and
+`RELAY_URL` in the env. Common locations:
+
+- **Cursor** — `~/.cursor/mcp.json`
+- **Cline** — settings panel → MCP servers
+- **Zed**, **Continue**, **Goose**, **Windsurf** — see each client's
+  MCP-server docs.
+
+## Quick start (project-local, for development)
+
+If you're hacking on the MCP itself and don't want a user-scope
+registration, the repo ships a project-local `.mcp.json` that wires
+things up when Claude is launched from this directory:
+
+```bash
+cd rx-browser-bridge-mcp
+claude --mcp-config ./.mcp.json
+```
+
+Same relay / extension setup as steps 3–4 above. Plugin / marketplace
+packaging is TBD — see Roadmap.
 
 ## Tests
 
