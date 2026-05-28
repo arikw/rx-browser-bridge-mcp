@@ -280,3 +280,31 @@ test('end-to-end: navigate + query roundtrip', async () => {
   assert.equal(qResult.ok, true, `query error: ${qResult.error}`)
   assert.equal(qResult.data?.text, 'hello')
 })
+
+async function extensionWorker() {
+  const t = browser!.targets().find((t) => t.type() === 'service_worker' && t.url().includes('background.js'))
+  return t ? await t.worker() : undefined
+}
+
+test('action button shows connectivity badge + activity tooltip while handling', async () => {
+  const worker = await extensionWorker()
+  assert.ok(worker, 'extension service worker not reachable')
+
+  // Fire a request and, while it's still within the ≥5s flash window, read the
+  // real toolbar state back. (The flash auto-stop timing is plain setInterval
+  // logic — verified by reading the source, not by sleeping here.)
+  const res = await pollUntilResult(await enqueue({ action: 'screenshot' }))
+  assert.equal(res.ok, true, `screenshot error: ${res.error}`)
+
+  const title = await worker.evaluate(async () => await (chrome as any).action.getTitle({}))
+  const badge = await worker.evaluate(async () => await (chrome as any).action.getBadgeText({}))
+  const color = await worker.evaluate(async () => await (chrome as any).action.getBadgeBackgroundColor({}))
+  // Tooltip reflects live activity (the icon is flashing red alongside it).
+  assert.match(title, /handling/, `expected an activity tooltip, saw ${JSON.stringify(title)}`)
+  // Badge reflects the (connected) relay link — a green status dot.
+  assert.equal(badge, '●', `expected a status badge, saw ${JSON.stringify(badge)}`)
+  assert.ok(
+    Array.isArray(color) && color[1] > color[0] && color[1] > color[2],
+    `expected a green (connected) badge colour, saw ${JSON.stringify(color)}`,
+  )
+})

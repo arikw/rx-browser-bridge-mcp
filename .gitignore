@@ -11,6 +11,7 @@ extension/icons/*.png.bak
 .env
 .env.local
 .playwright-mcp/
+flash-preview.png
 
 # Private working notes
 .claude/memory/

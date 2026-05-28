@@ -12,6 +12,8 @@ const HEARTBEAT_MS = 20_000
 const CONFIRM_TIMEOUT_MS = 10_000
 const SHOT_THROTTLE_MS = 450      // spacing between captureVisibleTab calls (Chrome rate-limits ~2/sec)
 const FULLPAGE_MAX_SLICES = 12    // cap stitched slices so a huge page can't blow the relay poll budget
+const FLASH_MIN_MS = 5_000        // keep the action icon flashing ≥5s after each incoming request
+const FLASH_INTERVAL_MS = 450     // red↔idle toggle cadence while flashing
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -24,6 +26,13 @@ let lastError = null
 let everRegistered = false
 const auditLog = []
 const pendingConfirm = new Map()
+
+let flashTimer = null
+let flashUntil = 0
+let flashPhase = false
+let inFlight = 0
+let idleIconCache = null
+let redIconCache = null
 
 function explainClose(code, reason, url) {
   // Browsers fabricate 1006 for any handshake failure (auth, path, refused,
@@ -291,20 +300,135 @@ async function dispatchAction(action, args) {
   return { ok: false, error: `unknown-action: ${action}` }
 }
 
+// --- Toolbar indicator ------------------------------------------------------
+// The action button carries two independent signals:
+//   • a status badge whose colour tracks the relay connection (green=connected,
+//     amber=connecting, orange=retrying, red=disconnected, grey=disabled), and
+//   • a red flash of the globe icon while the bridge is handling a request — an
+//     out-of-band cue that something is driving the browser right now.
+// Each incoming request arms the flash for ≥FLASH_MIN_MS, held while any request
+// is in flight (a full-page screenshot can run for many seconds). Every
+// chrome.action call is guarded — a failure here must never break dispatch.
+
+// Globe glyph. Kept in sync with scripts/gen-icons.mjs, which renders the same
+// shape to the static PNGs in the manifest. Idle is a transparent-background
+// accent globe (adapts to any toolbar theme); the handling flash is a bold red
+// filled tile so the activity cue is unmistakable.
+function drawGlobe(ctx, size, color) {
+  const c = size / 2, gr = size * 0.34
+  ctx.strokeStyle = color
+  ctx.lineWidth = Math.max(1.5, size * 0.09)
+  ctx.lineCap = 'round'
+  ctx.beginPath(); ctx.arc(c, c, gr, 0, Math.PI * 2); ctx.stroke()                  // sphere
+  ctx.beginPath(); ctx.moveTo(c - gr, c); ctx.lineTo(c + gr, c); ctx.stroke()       // equator
+  ctx.beginPath(); ctx.ellipse(c, c, gr * 0.5, gr, 0, 0, Math.PI * 2); ctx.stroke() // meridian
+}
+
+function buildIcon(red) {
+  const out = {}
+  for (const size of [16, 32]) {
+    const ctx = new OffscreenCanvas(size, size).getContext('2d')
+    if (red) {
+      ctx.fillStyle = '#e11d48'
+      ctx.beginPath()
+      if (ctx.roundRect) ctx.roundRect(0, 0, size, size, Math.round(size * 0.22))
+      else ctx.rect(0, 0, size, size)
+      ctx.fill()
+      drawGlobe(ctx, size, '#ffffff')
+    } else {
+      drawGlobe(ctx, size, '#38bdf8')      // transparent background, accent globe
+    }
+    out[size] = ctx.getImageData(0, 0, size, size)
+  }
+  return out
+}
+
+function idleIcon() { try { return (idleIconCache ??= buildIcon(false)) } catch { return null } }
+function redIcon() { try { return (redIconCache ??= buildIcon(true)) } catch { return null } }
+
+function setActionIcon(red) {
+  try {
+    const imageData = red ? redIcon() : idleIcon()
+    if (imageData) chrome.action.setIcon({ imageData })
+  } catch {}
+}
+
+function badgeForState(state) {
+  switch (state) {
+    case 'connected':  return { text: '●', color: '#16a34a' }   // green
+    case 'connecting': return { text: '●', color: '#f59e0b' }   // amber
+    case 'retrying':   return { text: '●', color: '#f97316' }   // orange
+    case 'disabled':   return { text: '○', color: '#6b7280' }   // grey
+    default:           return { text: '●', color: '#ef4444' }   // red — idle/disconnected
+  }
+}
+
+// Reflect the live connection status on the badge (and, when not mid-flash, the
+// tooltip). Called on every connection-state transition.
+async function applyStatus() {
+  let enabled = true
+  try { ({ enabled = true } = await chrome.storage.local.get('enabled')) } catch {}
+  const state = deriveState(enabled)
+  const b = badgeForState(state)
+  try {
+    chrome.action.setBadgeText({ text: b.text })
+    chrome.action.setBadgeBackgroundColor({ color: b.color })
+    if (!flashTimer) chrome.action.setTitle({ title: `RX MCP Browser Bridge — ${state}` })
+  } catch {}
+}
+
+function flashTick() {
+  if (inFlight > 0 || Date.now() < flashUntil) {
+    flashPhase = !flashPhase
+    setActionIcon(flashPhase)
+  } else {
+    stopFlashing()
+  }
+}
+
+function stopFlashing() {
+  if (flashTimer) { clearInterval(flashTimer); flashTimer = null }
+  flashPhase = false
+  setActionIcon(false)
+  applyStatus()                      // restore the idle tooltip + status badge
+}
+
+function beginActivity(action) {
+  inFlight += 1
+  flashUntil = Math.max(flashUntil, Date.now() + FLASH_MIN_MS)
+  try { chrome.action.setTitle({ title: `RX MCP Browser Bridge — handling: ${action ?? 'request'}` }) } catch {}
+  if (!flashTimer) {
+    flashPhase = true
+    setActionIcon(true)              // go red immediately, don't wait a tick
+    flashTimer = setInterval(flashTick, FLASH_INTERVAL_MS)
+  }
+}
+
+function endActivity() {
+  if (inFlight > 0) inFlight -= 1
+  // No stop here: flashTick keeps flashing until inFlight==0 AND the ≥5s window
+  // since the last request has elapsed, so brief commands still flash for 5s.
+}
+
 async function handleCmd(frame) {
   pushAudit({ kind: 'cmd', id: frame.id, action: frame.action, args: frame.args })
-  if (isDestructive(frame.action, frame.args)) {
-    const allow = await notifyConfirm(frame.action, frame.args)
-    if (!allow) {
-      sendResult(frame.id, false, undefined, 'user-denied')
-      return
-    }
-  }
+  beginActivity(frame.action)
   try {
-    const result = await dispatchAction(frame.action, frame.args)
-    sendResult(frame.id, !!result.ok, result.data, result.error)
-  } catch (e) {
-    sendResult(frame.id, false, undefined, String(e?.message ?? e))
+    if (isDestructive(frame.action, frame.args)) {
+      const allow = await notifyConfirm(frame.action, frame.args)
+      if (!allow) {
+        sendResult(frame.id, false, undefined, 'user-denied')
+        return
+      }
+    }
+    try {
+      const result = await dispatchAction(frame.action, frame.args)
+      sendResult(frame.id, !!result.ok, result.data, result.error)
+    } catch (e) {
+      sendResult(frame.id, false, undefined, String(e?.message ?? e))
+    }
+  } finally {
+    endActivity()
   }
 }
 
@@ -330,6 +454,7 @@ async function connect() {
     return
   }
   ws = mine
+  applyStatus()                      // 'connecting'
 
   // All handlers guard `ws === mine` so stale callbacks from a replaced
   // socket can't trigger reconnect cascades or stomp current state.
@@ -346,6 +471,7 @@ async function connect() {
       current_url: tab?.url,
     }))
     pushAudit({ kind: 'connected', relay: cfg.relay_url, browser_id: cfg.browser_id })
+    applyStatus()                    // 'connected'
     if (heartbeatTimer) clearInterval(heartbeatTimer)
     heartbeatTimer = setInterval(async () => {
       if (ws !== mine || mine.readyState !== WebSocket.OPEN) return
@@ -392,6 +518,7 @@ function scheduleReconnect() {
     connect()
   }, reconnectDelay)
   reconnectDelay = Math.min(reconnectDelay * 2, 30_000)
+  applyStatus()                      // 'retrying'
 }
 
 function deriveState(enabled) {
@@ -418,7 +545,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true
   }
   if (msg?.type === 'kill') {
-    chrome.storage.local.set({ enabled: false })
+    chrome.storage.local.set({ enabled: false }).then(applyStatus)
     try { ws?.close() } catch {}
     return false
   }
@@ -450,4 +577,6 @@ globalThis.__rxbb_reconnect = () => {
   scheduleReconnect()
 }
 
+setActionIcon(false)   // globe icon from the start
+applyStatus()          // and an initial status badge
 connect()

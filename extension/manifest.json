@@ -1,8 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "rx-browser-bridge",
+  "name": "RX MCP Browser Bridge",
   "version": "0.1.0",
-  "description": "Bridges this browser to a Claude Code session via a relay server.",
+  "description": "Bridges this browser to an AI coding agent (any MCP client) via a relay server.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "permissions": [
     "activeTab",
     "scripting",
@@ -18,8 +24,12 @@
     "type": "module"
   },
   "action": {
-    "default_title": "rx-browser-bridge",
-    "default_popup": "popup.html"
+    "default_title": "RX MCP Browser Bridge",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
   },
   "options_ui": {
     "page": "options.html",

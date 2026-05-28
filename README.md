@@ -33,7 +33,8 @@ self-hosted relay + MV3 extension.
   Bearer-token auth (POSTER for CC, PULLER for extension). sqlite for
   audit log.
 - **mcp/** — MCP stdio server loaded by Claude Code. Tools:
-  `list_browsers`, `screenshot`, `navigate`, `click`, `fill`.
+  `list_browsers`, `screenshot`, `navigate`, `new_tab`, `click`, `fill`,
+  `query`.
 - **extension/** — Manifest v3 extension. Persistent WS to relay,
   dispatches commands to active tab via `chrome.scripting.executeScript`
   + `chrome.tabs.captureVisibleTab`. Notification-based confirmation
@@ -197,8 +198,10 @@ unpacked extension, registers the browser, exercises the full pipe.
 | `list_browsers` | — | no |
 | `screenshot` | `fullPage?`, `target?` / `tag?` | no |
 | `navigate` | `url`, `target?` / `tag?` | no |
+| `new_tab` | `url`, `active?`, `target?` / `tag?` | no |
 | `click` | `selector`, `target?` / `tag?` | yes if selector matches submit/post/send |
 | `fill` | `selector`, `value`, `target?` / `tag?` | yes if selector mentions password |
+| `query` | `selector`, `target?` / `tag?` | no |
 
 `screenshot` captures the visible viewport by default. Pass
 `fullPage: true` to capture the entire scrollable page: the extension
