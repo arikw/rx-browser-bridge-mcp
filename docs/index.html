@@ -531,7 +531,7 @@
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
         </div>
         <h3 class="font-semibold text-lg mb-2">Eight MCP tools</h3>
-        <p class="text-gray-400 text-sm leading-relaxed"><span class="mono">list_browsers</span>, <span class="mono">screenshot</span>, <span class="mono">navigate</span>, <span class="mono">new_tab</span>, <span class="mono">click</span>, <span class="mono">fill</span>, <span class="mono">query</span>, <span class="mono">evaluate</span>. Enough to inspect, interact, and report — the agent takes it from there. <span class="mono">screenshot</span> takes <span class="mono">fullPage:true</span> to scroll-and-stitch the whole page; <span class="mono">evaluate</span> runs arbitrary JS in the page for anything else.</p>
+        <p class="text-gray-400 text-sm leading-relaxed"><span class="mono">list_browsers</span>, <span class="mono">screenshot</span>, <span class="mono">navigate</span>, <span class="mono">new_tab</span>, <span class="mono">click</span>, <span class="mono">fill</span>, <span class="mono">query</span>, <span class="mono">evaluate</span>. Enough to inspect, interact, and report — the agent takes it from there. <span class="mono">screenshot</span> takes <span class="mono">fullPage:true</span> to scroll-and-stitch the whole page; <span class="mono">evaluate</span> runs arbitrary JS in the page (via the <span class="mono">userScripts</span> world, so it works even on CSP-locked sites like GitHub) for anything else.</p>
       </div>
 
       <div class="feature-card rounded-xl p-6">
@@ -548,6 +548,14 @@
         </div>
         <h3 class="font-semibold text-lg mb-2">Destructive-action prompt</h3>
         <p class="text-gray-400 text-sm leading-relaxed">Click selectors that look like submit / post / send, or fill on password fields, trigger a Chrome notification with Allow / Deny buttons. Default-deny after 10s. No double-checking your auth-token field after the fact.</p>
+      </div>
+
+      <div class="feature-card rounded-xl p-6">
+        <div class="w-10 h-10 rounded-lg bg-red-500/15 text-red-400 flex items-center justify-center mb-4">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-2">Live activity flash + status badge</h3>
+        <p class="text-gray-400 text-sm leading-relaxed">The toolbar icon flashes red while the bridge is handling a request (≥5s, held while requests keep coming) — an out-of-band cue that something is driving your browser right now. A separate badge tracks the relay link: green connected, amber connecting, orange retrying, red disconnected, grey disabled.</p>
       </div>
 
       <div class="feature-card rounded-xl p-6">
