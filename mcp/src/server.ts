@@ -85,7 +85,11 @@ const mcp = new Server(
       "first to see which of the user's browsers are connected and pick a target (by id or tag). " +
       'When the user refers to a specific tab among several (and especially with multiple windows open, ' +
       'where the "active tab" is just whatever window was last focused), call list_tabs, remember the ' +
-      'relevant tab_id, and pass it as tabId on subsequent calls so each action hits that exact tab.',
+      'relevant tab_id, and pass it as tabId on subsequent calls so each action hits that exact tab. ' +
+      'Every action returns the tab_id it acted on, and list_tabs marks the current tab (current:true / ' +
+      'current_tab_id). So once the user starts talking about a tab — including "the current tab" — ' +
+      'capture that tab_id from the first result and reuse it as tabId on the follow-up actions in the ' +
+      'same conversation, so the thread stays pinned to that tab even if window focus later changes.',
   },
 )
 

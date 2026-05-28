@@ -331,15 +331,24 @@ test('end-to-end: list_tabs + tabId targets a specific tab', async () => {
   const tabB = b.data.tab_id
   await new Promise((r) => setTimeout(r, 700)) // let both load
 
-  // list_tabs sees both, each with a host.
-  const tabs = (await pollUntilResult(await enqueue({ action: 'list_tabs' }))).data.tabs
-  const ids = tabs.map((t: any) => t.tab_id)
+  // list_tabs sees both (each with a host) and marks exactly one current tab.
+  const lt = (await pollUntilResult(await enqueue({ action: 'list_tabs' }))).data
+  const ids = lt.tabs.map((t: any) => t.tab_id)
   assert.ok(ids.includes(tabA) && ids.includes(tabB), `list_tabs missing tabs; saw ${JSON.stringify(ids)}`)
-  assert.ok(tabs.every((t: any) => t.host), 'every listed tab should report a host')
+  assert.ok(lt.tabs.every((t: any) => t.host), 'every listed tab should report a host')
+  const currents = lt.tabs.filter((t: any) => t.current)
+  assert.equal(currents.length, 1, `expected exactly one current tab, saw ${currents.length}`)
+  assert.equal(currents[0].tab_id, lt.current_tab_id, 'current flag should match current_tab_id')
 
-  // query routes to the exact tab id — including the background tab B.
+  // query routes to the exact tab id — including the background tab B — and
+  // echoes back the resolved tab_id so it can be captured and reused.
   const qB = await pollUntilResult(await enqueue({ action: 'query', args: { selector: '#hi', tabId: tabB } }))
   assert.equal(qB.data.text, 'hello', `tabB (/nav) should read 'hello', got ${JSON.stringify(qB.data)}`)
+  assert.equal(qB.data.tab_id, tabB, 'query should echo the tabId it acted on')
   const qA = await pollUntilResult(await enqueue({ action: 'query', args: { selector: '#hi', tabId: tabA } }))
   assert.equal(qA.data.text, 'RX TEST', `tabA (/seed) should read 'RX TEST', got ${JSON.stringify(qA.data)}`)
+
+  // A no-tabId action targets the current tab — the same one list_tabs flags.
+  const qActive = await pollUntilResult(await enqueue({ action: 'query', args: { selector: '#hi' } }))
+  assert.equal(qActive.data.tab_id, lt.current_tab_id, 'default (no tabId) action should hit the current tab')
 })

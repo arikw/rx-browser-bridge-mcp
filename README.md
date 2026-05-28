@@ -256,6 +256,10 @@ NOT yet implemented.
 - With multiple windows, "active tab" is just whatever window you focused
   last — so for deterministic targeting, look the tab up with `list_tabs`
   and pass its `tabId`.
+- Every action echoes the resolved `tab_id` (and `list_tabs` flags the
+  current tab via `current: true` / `current_tab_id`), so once a tab is
+  referenced — even "the current tab" — its id can be captured and reused
+  as `tabId` to keep follow-up actions pinned to it across turns.
 
 ## Security model (POC-level)
 

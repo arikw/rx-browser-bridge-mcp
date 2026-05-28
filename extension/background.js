@@ -316,11 +316,12 @@ async function runEvaluate(tab, code) {
 async function dispatchAction(action, args) {
   // Actions that don't operate on a pre-existing tab.
   if (action === 'list_tabs') {
+    const cur = await getActiveTab()   // same resolution the default targeting uses
     const tabs = await chrome.tabs.query({})
     const list = tabs
       .filter((t) => t.url && !SKIP_TAB.test(t.url))
-      .map((t) => ({ tab_id: t.id, window_id: t.windowId, active: t.active, host: hostOf(t.url), url: t.url, title: t.title }))
-    return { ok: true, data: { tabs: list } }
+      .map((t) => ({ tab_id: t.id, window_id: t.windowId, active: t.active, current: t.id === cur?.id, host: hostOf(t.url), url: t.url, title: t.title }))
+    return { ok: true, data: { tabs: list, current_tab_id: cur?.id } }
   }
 
   if (action === 'new_tab') {
@@ -334,6 +335,9 @@ async function dispatchAction(action, args) {
   const tab = await resolveTab(args)
   if (!tab?.id) return { ok: false, error: args?.tabId != null ? 'tab-not-found' : 'no-active-tab' }
   const host = hostOf(tab.url)
+  // Echo which tab we resolved to, so the agent can capture the id and reuse it
+  // (pass it back as tabId) to stay on this tab across later turns.
+  const meta = { tab_id: tab.id, window_id: tab.windowId, host }
 
   if (action === 'screenshot') {
     // captureVisibleTab only sees a window's *visible* tab, so bring the target
@@ -348,16 +352,18 @@ async function dispatchAction(action, args) {
     if (args?.fullPage) {
       const r = await captureFullPage(tab)
       r.host = host
+      if (r.data) Object.assign(r.data, meta)
       return r
     }
     const dataUrl = await captureVisible(tab.windowId)
-    return { ok: true, data: { dataUrl, tab_url: tab.url, tab_title: tab.title }, host }
+    return { ok: true, data: { dataUrl, tab_url: tab.url, tab_title: tab.title, ...meta }, host }
   }
 
   if (action === 'navigate') {
     if (!args?.url) return { ok: false, error: 'missing-url' }
     await chrome.tabs.update(tab.id, { url: String(args.url) })
-    return { ok: true, data: { url: args.url }, host: hostOf(args.url) }
+    const destHost = hostOf(args.url)
+    return { ok: true, data: { url: args.url, tab_id: tab.id, window_id: tab.windowId, host: destHost }, host: destHost }
   }
 
   if (action === 'evaluate') {
@@ -365,6 +371,7 @@ async function dispatchAction(action, args) {
     if (!code) return { ok: false, error: 'missing-code' }
     const r = await runEvaluate(tab, code)
     r.host = host
+    if (r.data) Object.assign(r.data, meta)
     return r
   }
 
@@ -411,6 +418,7 @@ async function dispatchAction(action, args) {
     })
     const out = result ?? { ok: false, error: 'no-script-result' }
     out.host = host
+    if (out.data) Object.assign(out.data, meta)
     return out
   }
 
