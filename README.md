@@ -79,9 +79,13 @@ and docker / podman compose. Edit once, applies everywhere.
 # Option A — tsx (no build step, foreground)
 npm -w relay run dev
 
-# Option B — container (backgrounded by compose)
-cd relay
-docker compose up --build       # or: podman compose up --build
+# Option B — container via compose (auto-discovers compose.yaml)
+cd relay && docker compose up --build       # or: podman compose up --build
+
+# Option C — without compose (flags mirror compose.yaml)
+cd relay && docker build -t rx-browser-bridge-relay:dev .
+docker run -d --restart unless-stopped -p 127.0.0.1:3000:3000 --env-file ../.env \
+  -e DATA_DIR=/data -v "$PWD/data:/data" rx-browser-bridge-relay:dev
 ```
 
 Defaults:
