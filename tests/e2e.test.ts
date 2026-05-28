@@ -320,3 +320,26 @@ test('action button shows connectivity badge + activity tooltip while handling',
     `expected a green (connected) badge colour, saw ${JSON.stringify(color)}`,
   )
 })
+
+test('end-to-end: list_tabs + tabId targets a specific tab', async () => {
+  // Two tabs with distinct content; B stays in the background.
+  const a = await pollUntilResult(await enqueue({ action: 'new_tab', args: { url: `${PAGE_BASE}/seed`, active: true } }))
+  const b = await pollUntilResult(await enqueue({ action: 'new_tab', args: { url: `${PAGE_BASE}/nav`, active: false } }))
+  assert.equal(a.ok, true, `new_tab A: ${a.error}`)
+  assert.equal(b.ok, true, `new_tab B: ${b.error}`)
+  const tabA = a.data.tab_id
+  const tabB = b.data.tab_id
+  await new Promise((r) => setTimeout(r, 700)) // let both load
+
+  // list_tabs sees both, each with a host.
+  const tabs = (await pollUntilResult(await enqueue({ action: 'list_tabs' }))).data.tabs
+  const ids = tabs.map((t: any) => t.tab_id)
+  assert.ok(ids.includes(tabA) && ids.includes(tabB), `list_tabs missing tabs; saw ${JSON.stringify(ids)}`)
+  assert.ok(tabs.every((t: any) => t.host), 'every listed tab should report a host')
+
+  // query routes to the exact tab id — including the background tab B.
+  const qB = await pollUntilResult(await enqueue({ action: 'query', args: { selector: '#hi', tabId: tabB } }))
+  assert.equal(qB.data.text, 'hello', `tabB (/nav) should read 'hello', got ${JSON.stringify(qB.data)}`)
+  const qA = await pollUntilResult(await enqueue({ action: 'query', args: { selector: '#hi', tabId: tabA } }))
+  assert.equal(qA.data.text, 'RX TEST', `tabA (/seed) should read 'RX TEST', got ${JSON.stringify(qA.data)}`)
+})

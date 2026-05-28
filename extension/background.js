@@ -72,21 +72,47 @@ async function persistBrowserId(id) {
 }
 
 function pushAudit(entry) {
-  auditLog.unshift({ ts: new Date().toISOString(), ...entry })
+  const row = { ts: new Date().toISOString(), ...entry }
+  auditLog.unshift(row)
   if (auditLog.length > 50) auditLog.length = 50
   chrome.storage.session?.set?.({ audit: auditLog })
+  return row
 }
 
+// Tabs we never want to auto-target: the extension's own pages, chrome://,
+// devtools, the Web Store, etc. (scripting/capture is blocked there anyway).
+const SKIP_TAB = /^(chrome|edge|about|devtools|view-source|chrome-extension):|^https?:\/\/(chrome\.google\.com\/webstore|chromewebstore\.google\.com)/
+
+function hostOf(url) {
+  try { return new URL(url).hostname || url } catch { return undefined }
+}
+
+// The default tab when no explicit tabId is given: the active tab of the
+// last-focused window, skipping non-drivable tabs (so it never lands on this
+// extension's own popup/options page). Falls back to any window's active web tab.
 async function getActiveTab() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  return tab
+  let cands = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
+  let tab = cands.find((t) => t.url && !SKIP_TAB.test(t.url))
+  if (tab) return tab
+  cands = await chrome.tabs.query({ active: true })
+  tab = cands.find((t) => t.url && !SKIP_TAB.test(t.url))
+  return tab || cands[0]
 }
 
-function sendResult(id, ok, data, error) {
+// Resolve the tab a command targets: an explicit args.tabId, else the default
+// active tab. Returns null if a requested tabId no longer exists.
+async function resolveTab(args) {
+  if (args && args.tabId != null) {
+    try { return await chrome.tabs.get(Number(args.tabId)) } catch { return null }
+  }
+  return await getActiveTab()
+}
+
+function sendResult(id, ok, data, error, host) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'result', id, ok, data, error }))
   }
-  pushAudit({ kind: 'result', id, ok, error })
+  pushAudit({ kind: 'result', id, ok, error, host })
 }
 
 async function notifyConfirm(action, args) {
@@ -288,31 +314,58 @@ async function runEvaluate(tab, code) {
 }
 
 async function dispatchAction(action, args) {
-  const tab = await getActiveTab()
-  if (!tab?.id) return { ok: false, error: 'no-active-tab' }
-
-  if (action === 'screenshot') {
-    if (args?.fullPage) return await captureFullPage(tab)
-    const dataUrl = await captureVisible(tab.windowId)
-    return { ok: true, data: { dataUrl, tab_url: tab.url, tab_title: tab.title } }
-  }
-
-  if (action === 'navigate') {
-    if (!args?.url) return { ok: false, error: 'missing-url' }
-    await chrome.tabs.update(tab.id, { url: String(args.url) })
-    return { ok: true, data: { url: args.url } }
+  // Actions that don't operate on a pre-existing tab.
+  if (action === 'list_tabs') {
+    const tabs = await chrome.tabs.query({})
+    const list = tabs
+      .filter((t) => t.url && !SKIP_TAB.test(t.url))
+      .map((t) => ({ tab_id: t.id, window_id: t.windowId, active: t.active, host: hostOf(t.url), url: t.url, title: t.title }))
+    return { ok: true, data: { tabs: list } }
   }
 
   if (action === 'new_tab') {
     if (!args?.url) return { ok: false, error: 'missing-url' }
     const created = await chrome.tabs.create({ url: String(args.url), active: args.active !== false })
-    return { ok: true, data: { tab_id: created.id, url: created.url ?? args.url, window_id: created.windowId } }
+    const url = created.url ?? args.url
+    return { ok: true, data: { tab_id: created.id, url, window_id: created.windowId }, host: hostOf(url) }
+  }
+
+  // Everything else acts on a specific tab (args.tabId) or the active tab.
+  const tab = await resolveTab(args)
+  if (!tab?.id) return { ok: false, error: args?.tabId != null ? 'tab-not-found' : 'no-active-tab' }
+  const host = hostOf(tab.url)
+
+  if (action === 'screenshot') {
+    // captureVisibleTab only sees a window's *visible* tab, so bring the target
+    // tab to the front first (the user has OK'd this focus flip).
+    if (!tab.active) {
+      try {
+        await chrome.tabs.update(tab.id, { active: true })
+        await chrome.windows.update(tab.windowId, { focused: true })
+        await sleep(200)
+      } catch {}
+    }
+    if (args?.fullPage) {
+      const r = await captureFullPage(tab)
+      r.host = host
+      return r
+    }
+    const dataUrl = await captureVisible(tab.windowId)
+    return { ok: true, data: { dataUrl, tab_url: tab.url, tab_title: tab.title }, host }
+  }
+
+  if (action === 'navigate') {
+    if (!args?.url) return { ok: false, error: 'missing-url' }
+    await chrome.tabs.update(tab.id, { url: String(args.url) })
+    return { ok: true, data: { url: args.url }, host: hostOf(args.url) }
   }
 
   if (action === 'evaluate') {
     const code = String(args?.code ?? '')
     if (!code) return { ok: false, error: 'missing-code' }
-    return await runEvaluate(tab, code)
+    const r = await runEvaluate(tab, code)
+    r.host = host
+    return r
   }
 
   if (action === 'query' || action === 'click' || action === 'fill') {
@@ -356,7 +409,9 @@ async function dispatchAction(action, args) {
       args: [action, args ?? {}],
       world: 'MAIN',
     })
-    return result ?? { ok: false, error: 'no-script-result' }
+    const out = result ?? { ok: false, error: 'no-script-result' }
+    out.host = host
+    return out
   }
 
   return { ok: false, error: `unknown-action: ${action}` }
@@ -473,7 +528,7 @@ function endActivity() {
 }
 
 async function handleCmd(frame) {
-  pushAudit({ kind: 'cmd', id: frame.id, action: frame.action, args: frame.args })
+  const entry = pushAudit({ kind: 'cmd', id: frame.id, action: frame.action, args: frame.args })
   beginActivity(frame.action)
   try {
     if (isDestructive(frame.action, frame.args)) {
@@ -485,7 +540,8 @@ async function handleCmd(frame) {
     }
     try {
       const result = await dispatchAction(frame.action, frame.args)
-      sendResult(frame.id, !!result.ok, result.data, result.error)
+      if (result?.host) entry.host = result.host   // surface the affected hostname in the popup log
+      sendResult(frame.id, !!result.ok, result.data, result.error, result?.host)
     } catch (e) {
       sendResult(frame.id, false, undefined, String(e?.message ?? e))
     }

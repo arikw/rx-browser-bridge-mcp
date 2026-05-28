@@ -43,7 +43,8 @@ async function refresh() {
   for (const entry of status?.audit ?? []) {
     const row = document.createElement('div')
     row.className = `audit-row ${entry.kind}`
-    row.textContent = `${new Date(entry.ts).toLocaleString()}  ${entry.kind}  ${entry.action ?? ''} ${entry.error ?? ''}`
+    const host = entry.host ? `  ${entry.host}` : ''
+    row.textContent = `${new Date(entry.ts).toLocaleString()}  ${entry.kind}  ${entry.action ?? ''}${host} ${entry.error ?? ''}`
     audit.appendChild(row)
   }
 }

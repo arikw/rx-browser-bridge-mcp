@@ -200,13 +200,14 @@ unpacked extension, registers the browser, exercises the full pipe.
 | Tool | Args | Destructive? |
 |---|---|---|
 | `list_browsers` | — | no |
-| `screenshot` | `fullPage?`, `target?` / `tag?` | no |
-| `navigate` | `url`, `target?` / `tag?` | no |
+| `list_tabs` | `target?` / `tag?` | no |
+| `screenshot` | `fullPage?`, `tabId?`, `target?` / `tag?` | no |
+| `navigate` | `url`, `tabId?`, `target?` / `tag?` | no |
 | `new_tab` | `url`, `active?`, `target?` / `tag?` | no |
-| `click` | `selector`, `target?` / `tag?` | yes if selector matches submit/post/send |
-| `fill` | `selector`, `value`, `target?` / `tag?` | yes if selector mentions password |
-| `query` | `selector`, `target?` / `tag?` | no |
-| `evaluate` | `code`, `target?` / `tag?` | runs arbitrary JS — see note |
+| `click` | `selector`, `tabId?`, `target?` / `tag?` | yes if selector matches submit/post/send |
+| `fill` | `selector`, `value`, `tabId?`, `target?` / `tag?` | yes if selector mentions password |
+| `query` | `selector`, `tabId?`, `target?` / `tag?` | no |
+| `evaluate` | `code`, `tabId?`, `target?` / `tag?` | runs arbitrary JS — see note |
 
 `evaluate` runs arbitrary JavaScript in the active tab and returns the
 final expression value (JSON-encoded; return a Promise to await async
@@ -239,9 +240,22 @@ NOT yet implemented.
 
 ## Targeting
 
+**Which browser** (every tool):
 - `target: "office"` — exact browser id, errors if not online.
 - `tag: "reddit"` — first online browser carrying the tag.
 - No multicast/broadcast (intentional POC scope).
+
+**Which tab** (`screenshot`/`navigate`/`click`/`fill`/`query`/`evaluate`):
+- Omit `tabId` → the active tab of the **last-focused window**, skipping
+  the extension's own pages and `chrome://` (so it never lands on the
+  popup/options).
+- `tabId: N` → that exact tab. Get ids from `list_tabs` (or `new_tab`'s
+  return). DOM actions hit a background tab without disturbing focus;
+  `screenshot` briefly activates the tab first, since only a window's
+  visible tab can be captured.
+- With multiple windows, "active tab" is just whatever window you focused
+  last — so for deterministic targeting, look the tab up with `list_tabs`
+  and pass its `tabId`.
 
 ## Security model (POC-level)
 

@@ -82,7 +82,10 @@ const mcp = new Server(
       'Do NOT use a fresh-browser automation server (playwright, puppeteer, chrome-devtools) for ' +
       "those references — those spawn an isolated browser with none of the user's state. Reserve " +
       'fresh-browser tools for explicit clean-room / throwaway-browser requests. Call list_browsers ' +
-      'first to see which of the user\'s browsers are connected and pick a target (by id or tag).',
+      "first to see which of the user's browsers are connected and pick a target (by id or tag). " +
+      'When the user refers to a specific tab among several (and especially with multiple windows open, ' +
+      'where the "active tab" is just whatever window was last focused), call list_tabs, remember the ' +
+      'relevant tab_id, and pass it as tabId on subsequent calls so each action hits that exact tab.',
   },
 )
 
@@ -93,6 +96,17 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {} },
   },
   {
+    name: 'list_tabs',
+    description: "List the open tabs on the target browser: tab_id, host, url, title, window_id, active. Excludes the extension's own pages and chrome:// pages. Find a tab_id here, then pass it as tabId to other tools to act on that exact tab regardless of which window is focused.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        target: { type: 'string', description: 'Browser id. If omitted, RX_BROWSER_DEFAULT_TARGET is used.' },
+        tag: { type: 'string', description: 'Alternative to target: first online browser matching this tag.' },
+      },
+    },
+  },
+  {
     name: 'screenshot',
     description: 'Capture the active tab on the target browser as a PNG. By default captures the visible viewport; pass fullPage:true to scroll-and-stitch the entire scrollable page.',
     inputSchema: {
@@ -101,6 +115,7 @@ const TOOLS = [
         target: { type: 'string', description: 'Browser id. If omitted, RX_BROWSER_DEFAULT_TARGET is used.' },
         tag: { type: 'string', description: 'Alternative to target: first online browser matching this tag.' },
         fullPage: { type: 'boolean', description: 'Capture the full scrollable page (scroll-and-stitch) instead of just the visible viewport. Default false. Sticky/fixed elements may repeat across slices; very long pages are capped.' },
+        tabId: { type: 'number', description: "Capture this exact tab id (from list_tabs or new_tab). It is briefly activated first, since only a window's visible tab can be captured. Omit to use the active tab." },
       },
     },
   },
@@ -113,6 +128,7 @@ const TOOLS = [
         url: { type: 'string', description: 'Absolute URL (https://…).' },
         target: { type: 'string' },
         tag: { type: 'string' },
+        tabId: { type: 'number', description: 'Navigate this exact tab id (from list_tabs or new_tab) instead of the active tab.' },
       },
       required: ['url'],
     },
@@ -126,6 +142,7 @@ const TOOLS = [
         selector: { type: 'string', description: 'CSS selector.' },
         target: { type: 'string' },
         tag: { type: 'string' },
+        tabId: { type: 'number', description: 'Act on this exact tab id (from list_tabs or new_tab) instead of the active tab.' },
       },
       required: ['selector'],
     },
@@ -140,6 +157,7 @@ const TOOLS = [
         value: { type: 'string' },
         target: { type: 'string' },
         tag: { type: 'string' },
+        tabId: { type: 'number', description: 'Act on this exact tab id (from list_tabs or new_tab) instead of the active tab.' },
       },
       required: ['selector', 'value'],
     },
@@ -167,6 +185,7 @@ const TOOLS = [
         selector: { type: 'string' },
         target: { type: 'string' },
         tag: { type: 'string' },
+        tabId: { type: 'number', description: 'Read from this exact tab id (from list_tabs or new_tab) instead of the active tab.' },
       },
       required: ['selector'],
     },
@@ -180,6 +199,7 @@ const TOOLS = [
         code: { type: 'string', description: 'JavaScript source. Its final expression value (or a Promise it resolves to) is returned, JSON-encoded.' },
         target: { type: 'string' },
         tag: { type: 'string' },
+        tabId: { type: 'number', description: 'Run in this exact tab id (from list_tabs or new_tab) instead of the active tab.' },
       },
       required: ['code'],
     },
@@ -198,7 +218,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     return { content: [{ type: 'text' as const, text: JSON.stringify(j, null, 2) }] }
   }
 
-  if (!['screenshot', 'navigate', 'click', 'fill', 'new_tab', 'query', 'evaluate'].includes(name)) {
+  if (!['screenshot', 'navigate', 'click', 'fill', 'new_tab', 'query', 'evaluate', 'list_tabs'].includes(name)) {
     return {
       content: [{ type: 'text' as const, text: `unknown tool: ${name}` }],
       isError: true,

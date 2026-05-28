@@ -380,7 +380,7 @@
           </svg>
         </div>
         <h3 class="font-semibold text-lg mb-2">2. MCP server — your agent's tools</h3>
-        <p class="text-gray-400 text-sm leading-relaxed">A standard stdio MCP server. Loaded by any MCP-aware coding agent — Claude Code via <span class="mono text-accent-400">.mcp.json</span>, Cursor / Cline / Zed / Continue / Goose / Windsurf via their own config. Exposes <span class="mono text-accent-400">list_browsers</span>, <span class="mono text-accent-400">screenshot</span>, <span class="mono text-accent-400">navigate</span>, <span class="mono text-accent-400">new_tab</span>, <span class="mono text-accent-400">click</span>, <span class="mono text-accent-400">fill</span>, <span class="mono text-accent-400">query</span>, <span class="mono text-accent-400">evaluate</span>.</p>
+        <p class="text-gray-400 text-sm leading-relaxed">A standard stdio MCP server. Loaded by any MCP-aware coding agent — Claude Code via <span class="mono text-accent-400">.mcp.json</span>, Cursor / Cline / Zed / Continue / Goose / Windsurf via their own config. Exposes <span class="mono text-accent-400">list_browsers</span>, <span class="mono text-accent-400">list_tabs</span>, <span class="mono text-accent-400">screenshot</span>, <span class="mono text-accent-400">navigate</span>, <span class="mono text-accent-400">new_tab</span>, <span class="mono text-accent-400">click</span>, <span class="mono text-accent-400">fill</span>, <span class="mono text-accent-400">query</span>, <span class="mono text-accent-400">evaluate</span>.</p>
       </div>
       <div class="feature-card rounded-xl p-6">
         <div class="w-10 h-10 rounded-lg bg-yellow-500/15 text-yellow-400 flex items-center justify-center mb-3">
@@ -530,8 +530,8 @@
         <div class="w-10 h-10 rounded-lg bg-accent-500/15 text-accent-400 flex items-center justify-center mb-4">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
         </div>
-        <h3 class="font-semibold text-lg mb-2">Eight MCP tools</h3>
-        <p class="text-gray-400 text-sm leading-relaxed"><span class="mono">list_browsers</span>, <span class="mono">screenshot</span>, <span class="mono">navigate</span>, <span class="mono">new_tab</span>, <span class="mono">click</span>, <span class="mono">fill</span>, <span class="mono">query</span>, <span class="mono">evaluate</span>. Enough to inspect, interact, and report — the agent takes it from there. <span class="mono">screenshot</span> takes <span class="mono">fullPage:true</span> to scroll-and-stitch the whole page; <span class="mono">evaluate</span> runs arbitrary JS in the page (via the <span class="mono">userScripts</span> world, so it works even on CSP-locked sites like GitHub) for anything else.</p>
+        <h3 class="font-semibold text-lg mb-2">Nine MCP tools</h3>
+        <p class="text-gray-400 text-sm leading-relaxed"><span class="mono">list_browsers</span>, <span class="mono">list_tabs</span>, <span class="mono">screenshot</span>, <span class="mono">navigate</span>, <span class="mono">new_tab</span>, <span class="mono">click</span>, <span class="mono">fill</span>, <span class="mono">query</span>, <span class="mono">evaluate</span>. Enough to inspect, interact, and report — the agent takes it from there. <span class="mono">screenshot</span> takes <span class="mono">fullPage:true</span> to scroll-and-stitch the whole page; <span class="mono">evaluate</span> runs arbitrary JS (via the <span class="mono">userScripts</span> world, so it works even on CSP-locked sites like GitHub); pass <span class="mono">tabId</span> from <span class="mono">list_tabs</span> to drive a specific tab across multiple windows.</p>
       </div>
 
       <div class="feature-card rounded-xl p-6">
