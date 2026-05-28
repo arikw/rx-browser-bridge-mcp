@@ -104,6 +104,10 @@ Defaults:
   - **Puller token**: paste `PULLER_TOKEN` from `.env`
   - **Browser id**: friendly slug, e.g. `office`
   - **Tags**: comma-separated, e.g. `reddit, hn`
+- For the `evaluate` tool to run on CSP-locked sites (GitHub, etc.), open
+  the extension's **Details** and enable **"Allow user scripts"** — Chrome's
+  gate for the `userScripts` API. Without it, `evaluate` still works on
+  pages whose own CSP permits `eval`.
 
 Click the toolbar icon → popup shows connection status, the last 50
 audit entries, and a kill switch.
@@ -204,13 +208,21 @@ unpacked extension, registers the browser, exercises the full pipe.
 | `query` | `selector`, `target?` / `tag?` | no |
 | `evaluate` | `code`, `target?` / `tag?` | runs arbitrary JS — see note |
 
-`evaluate` runs arbitrary JavaScript in the active tab's MAIN world and
-returns the final expression value (JSON-encoded; return a Promise to
-await async work). It's the escape hatch for anything `click`/`fill`/
-`query` can't express. It is **not** behind the confirmation prompt — it
-relies on the toolbar activity flash + the audit log for visibility, so
-the agent can chain complex page work without a click per step. A page's
-Content-Security-Policy can block `eval` on some sites.
+`evaluate` runs arbitrary JavaScript in the active tab and returns the
+final expression value (JSON-encoded; return a Promise to await async
+work). It's the escape hatch for anything `click`/`fill`/`query` can't
+express. It is **not** behind the confirmation prompt — it relies on the
+toolbar activity flash + the audit log for visibility, so the agent can
+chain complex page work without a click per step.
+
+It runs in the extension's **userScripts** world, whose CSP is set to
+allow `eval` and which is exempt from the page's own CSP — so it works
+even on CSP-locked sites (GitHub, etc.). This requires the **"Allow user
+scripts"** toggle on the extension's `chrome://extensions` Details page
+(Chrome's mandatory gate for the `userScripts` API). Without it,
+`evaluate` falls back to the page's MAIN world, where a CSP forbidding
+`unsafe-eval` will block it. Note: the userScripts world shares the DOM
+but not the page's JS globals.
 
 `screenshot` captures the visible viewport by default. Pass
 `fullPage: true` to capture the entire scrollable page: the extension

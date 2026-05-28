@@ -231,6 +231,62 @@ async function captureFullPage(tab) {
   }
 }
 
+// Run arbitrary JS in the active tab, return the JSON-encoded result.
+// Prefers the userScripts world: its CSP can be set to allow eval and it is
+// exempt from the page's CSP, so this works even on CSP-locked sites like
+// GitHub — provided the user has flipped the "Allow user scripts" toggle on the
+// extension card. Falls back to MAIN-world scripting (works only where the
+// page's own CSP permits unsafe-eval) when userScripts is unavailable.
+async function runEvaluate(tab, code) {
+  if (chrome.userScripts?.execute) {
+    try {
+      try {
+        await chrome.userScripts.configureWorld({ csp: "script-src 'self' 'unsafe-eval'", messaging: false })
+      } catch {}
+      const wrapped = `(() => {
+        try {
+          var v = (0, eval)(${JSON.stringify(code)});
+          var value; try { value = (v === undefined) ? 'undefined' : JSON.stringify(v) } catch (e) { value = String(v) }
+          return { ok: true, value: (value === undefined ? String(v) : value), type: typeof v };
+        } catch (e) { return { ok: false, error: String((e && e.message) || e) } }
+      })()`
+      const res = await chrome.userScripts.execute({
+        target: { tabId: tab.id },
+        world: 'USER_SCRIPT',
+        injectImmediately: true,
+        js: [{ code: wrapped }],
+      })
+      const r = res && res[0] && res[0].result
+      if (r) {
+        if (!r.ok) return { ok: false, error: r.error }
+        return { ok: true, data: { value: r.value, type: r.type, world: 'user_script' } }
+      }
+    } catch (e) {
+      // userScripts not enabled / too old — fall through to MAIN.
+    }
+  }
+
+  const [{ result } = {}] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    world: 'MAIN',
+    args: [code],
+    func: async (src) => {
+      try {
+        let v = (0, eval)(src)
+        if (v && typeof v.then === 'function') v = await v
+        let value
+        try { value = v === undefined ? 'undefined' : JSON.stringify(v) } catch { value = String(v) }
+        return { ok: true, value: value ?? String(v), type: typeof v }
+      } catch (e) {
+        return { ok: false, error: String((e && e.message) || e) }
+      }
+    },
+  })
+  if (!result) return { ok: false, error: 'no-script-result' }
+  if (!result.ok) return { ok: false, error: result.error }
+  return { ok: true, data: { value: result.value, type: result.type, world: 'main' } }
+}
+
 async function dispatchAction(action, args) {
   const tab = await getActiveTab()
   if (!tab?.id) return { ok: false, error: 'no-active-tab' }
@@ -256,25 +312,7 @@ async function dispatchAction(action, args) {
   if (action === 'evaluate') {
     const code = String(args?.code ?? '')
     if (!code) return { ok: false, error: 'missing-code' }
-    const [{ result } = {}] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      world: 'MAIN',
-      args: [code],
-      func: async (src) => {
-        try {
-          let v = (0, eval)(src)
-          if (v && typeof v.then === 'function') v = await v
-          let value
-          try { value = v === undefined ? 'undefined' : JSON.stringify(v) } catch { value = String(v) }
-          return { ok: true, value: value ?? String(v), type: typeof v }
-        } catch (e) {
-          return { ok: false, error: String((e && e.message) || e) }
-        }
-      },
-    })
-    if (!result) return { ok: false, error: 'no-script-result' }
-    if (!result.ok) return { ok: false, error: result.error }
-    return { ok: true, data: { value: result.value, type: result.type } }
+    return await runEvaluate(tab, code)
   }
 
   if (action === 'query' || action === 'click' || action === 'fill') {

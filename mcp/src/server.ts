@@ -162,7 +162,7 @@ const TOOLS = [
   },
   {
     name: 'evaluate',
-    description: 'Run arbitrary JavaScript in the active tab (page MAIN world) for complex DOM reads/interactions beyond click/fill/query. The final expression value is returned JSON-encoded; return a Promise to await async work. Note: a page Content-Security-Policy may block eval on some sites.',
+    description: 'Run arbitrary JavaScript in the active tab for complex DOM reads/interactions beyond click/fill/query. The final expression value is returned JSON-encoded. Runs in the extension userScripts world (works even on CSP-locked sites like GitHub when the extension\'s "Allow user scripts" toggle is on); otherwise falls back to the page MAIN world, which a page CSP that forbids unsafe-eval will block.',
     inputSchema: {
       type: 'object',
       properties: {
