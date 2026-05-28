@@ -281,6 +281,18 @@ test('end-to-end: navigate + query roundtrip', async () => {
   assert.equal(qResult.data?.text, 'hello')
 })
 
+test('end-to-end: evaluate runs arbitrary JS in the page', async () => {
+  // Known page so the DOM read is deterministic.
+  assert.equal((await pollUntilResult(await enqueue({ action: 'navigate', args: { url: `${PAGE_BASE}/nav` } }))).ok, true)
+  await new Promise((r) => setTimeout(r, 500))
+
+  const res = await pollUntilResult(
+    await enqueue({ action: 'evaluate', args: { code: "document.querySelector('#hi').textContent + ' ' + (1 + 2)" } }),
+  )
+  assert.equal(res.ok, true, `evaluate error: ${res.error}`)
+  assert.equal(JSON.parse(res.data.value), 'hello 3')   // reads the DOM and computes, in-page
+})
+
 async function extensionWorker() {
   const t = browser!.targets().find((t) => t.type() === 'service_worker' && t.url().includes('background.js'))
   return t ? await t.worker() : undefined

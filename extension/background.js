@@ -253,6 +253,30 @@ async function dispatchAction(action, args) {
     return { ok: true, data: { tab_id: created.id, url: created.url ?? args.url, window_id: created.windowId } }
   }
 
+  if (action === 'evaluate') {
+    const code = String(args?.code ?? '')
+    if (!code) return { ok: false, error: 'missing-code' }
+    const [{ result } = {}] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      world: 'MAIN',
+      args: [code],
+      func: async (src) => {
+        try {
+          let v = (0, eval)(src)
+          if (v && typeof v.then === 'function') v = await v
+          let value
+          try { value = v === undefined ? 'undefined' : JSON.stringify(v) } catch { value = String(v) }
+          return { ok: true, value: value ?? String(v), type: typeof v }
+        } catch (e) {
+          return { ok: false, error: String((e && e.message) || e) }
+        }
+      },
+    })
+    if (!result) return { ok: false, error: 'no-script-result' }
+    if (!result.ok) return { ok: false, error: result.error }
+    return { ok: true, data: { value: result.value, type: result.type } }
+  }
+
   if (action === 'query' || action === 'click' || action === 'fill') {
     const [{ result } = {}] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },

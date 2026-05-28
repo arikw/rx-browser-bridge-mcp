@@ -160,6 +160,19 @@ const TOOLS = [
       required: ['selector'],
     },
   },
+  {
+    name: 'evaluate',
+    description: 'Run arbitrary JavaScript in the active tab (page MAIN world) for complex DOM reads/interactions beyond click/fill/query. The final expression value is returned JSON-encoded; return a Promise to await async work. Note: a page Content-Security-Policy may block eval on some sites.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        code: { type: 'string', description: 'JavaScript source. Its final expression value (or a Promise it resolves to) is returned, JSON-encoded.' },
+        target: { type: 'string' },
+        tag: { type: 'string' },
+      },
+      required: ['code'],
+    },
+  },
 ] as const
 
 mcp.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }))
@@ -174,7 +187,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     return { content: [{ type: 'text' as const, text: JSON.stringify(j, null, 2) }] }
   }
 
-  if (!['screenshot', 'navigate', 'click', 'fill', 'new_tab', 'query'].includes(name)) {
+  if (!['screenshot', 'navigate', 'click', 'fill', 'new_tab', 'query', 'evaluate'].includes(name)) {
     return {
       content: [{ type: 'text' as const, text: `unknown tool: ${name}` }],
       isError: true,

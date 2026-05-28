@@ -202,6 +202,15 @@ unpacked extension, registers the browser, exercises the full pipe.
 | `click` | `selector`, `target?` / `tag?` | yes if selector matches submit/post/send |
 | `fill` | `selector`, `value`, `target?` / `tag?` | yes if selector mentions password |
 | `query` | `selector`, `target?` / `tag?` | no |
+| `evaluate` | `code`, `target?` / `tag?` | runs arbitrary JS — see note |
+
+`evaluate` runs arbitrary JavaScript in the active tab's MAIN world and
+returns the final expression value (JSON-encoded; return a Promise to
+await async work). It's the escape hatch for anything `click`/`fill`/
+`query` can't express. It is **not** behind the confirmation prompt — it
+relies on the toolbar activity flash + the audit log for visibility, so
+the agent can chain complex page work without a click per step. A page's
+Content-Security-Policy can block `eval` on some sites.
 
 `screenshot` captures the visible viewport by default. Pass
 `fullPage: true` to capture the entire scrollable page: the extension
