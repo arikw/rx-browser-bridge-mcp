@@ -195,10 +195,19 @@ unpacked extension, registers the browser, exercises the full pipe.
 | Tool | Args | Destructive? |
 |---|---|---|
 | `list_browsers` | — | no |
-| `screenshot` | `target?` / `tag?` | no |
+| `screenshot` | `fullPage?`, `target?` / `tag?` | no |
 | `navigate` | `url`, `target?` / `tag?` | no |
 | `click` | `selector`, `target?` / `tag?` | yes if selector matches submit/post/send |
 | `fill` | `selector`, `value`, `target?` / `tag?` | yes if selector mentions password |
+
+`screenshot` captures the visible viewport by default. Pass
+`fullPage: true` to capture the entire scrollable page: the extension
+scrolls a viewport at a time, captures each step with
+`chrome.tabs.captureVisibleTab`, and stitches the slices on an
+`OffscreenCanvas` — no `chrome.debugger` / CDP. Caveats: `position:fixed`
+/ sticky elements repeat on each slice, lazy content must paint quickly
+after each scroll, and very long pages are capped (12 slices) to stay
+within the relay's poll budget.
 
 Destructive actions trigger a Chrome notification with Allow / Deny
 buttons (10s timeout = deny). Per-domain / per-action trust toggles

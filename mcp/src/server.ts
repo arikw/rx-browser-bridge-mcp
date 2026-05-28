@@ -83,12 +83,13 @@ const TOOLS = [
   },
   {
     name: 'screenshot',
-    description: 'Capture the visible viewport of the active tab on the target browser. Returns a PNG data URL.',
+    description: 'Capture the active tab on the target browser as a PNG. By default captures the visible viewport; pass fullPage:true to scroll-and-stitch the entire scrollable page.',
     inputSchema: {
       type: 'object',
       properties: {
         target: { type: 'string', description: 'Browser id. If omitted, RX_BROWSER_DEFAULT_TARGET is used.' },
         tag: { type: 'string', description: 'Alternative to target: first online browser matching this tag.' },
+        fullPage: { type: 'boolean', description: 'Capture the full scrollable page (scroll-and-stitch) instead of just the visible viewport. Default false. Sticky/fixed elements may repeat across slices; very long pages are capped.' },
       },
     },
   },
@@ -190,7 +191,9 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
 
   // screenshot returns a dataUrl — render as image content alongside metadata.
   if (name === 'screenshot') {
-    const data = result.data as { dataUrl?: string; tab_url?: string; tab_title?: string } | undefined
+    const data = result.data as
+      | { dataUrl?: string; tab_url?: string; tab_title?: string; full_page?: boolean; slices?: number; truncated?: boolean }
+      | undefined
     const content: any[] = []
     if (data?.dataUrl) {
       const m = data.dataUrl.match(/^data:(image\/[\w+.-]+);base64,(.+)$/)
@@ -200,13 +203,18 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     }
     content.push({
       type: 'text',
-      text: JSON.stringify({ browser_id: result.browser_id, tab_url: data?.tab_url, tab_title: data?.tab_title }),
+      text: JSON.stringify({
+        browser_id: result.browser_id,
+        tab_url: data?.tab_url,
+        tab_title: data?.tab_title,
+        ...(data?.full_page ? { full_page: true, slices: data.slices, truncated: data.truncated } : {}),
+      }),
     })
     return { content }
   }
 
   return {
-    content: [{ type: 'text' as const, text: JSON.stringify({ browser_id: result.browser_id, ...result }, null, 2) }],
+    content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
   }
 })
 

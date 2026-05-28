@@ -10,6 +10,10 @@
 const DEFAULT_RELAY = 'ws://localhost:3000/ws'
 const HEARTBEAT_MS = 20_000
 const CONFIRM_TIMEOUT_MS = 10_000
+const SHOT_THROTTLE_MS = 450      // spacing between captureVisibleTab calls (Chrome rate-limits ~2/sec)
+const FULLPAGE_MAX_SLICES = 12    // cap stitched slices so a huge page can't blow the relay poll budget
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 let ws = null
 let heartbeatTimer = null
@@ -126,12 +130,105 @@ function isDestructive(action, args) {
   return false
 }
 
+// Capture the visible tab, retrying through Chrome's captureVisibleTab
+// rate-limit (~2 calls/sec) with backoff.
+async function captureVisible(windowId) {
+  let delay = 600
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      return await chrome.tabs.captureVisibleTab(windowId, { format: 'png' })
+    } catch (e) {
+      const msg = String((e && e.message) || e)
+      if (/quota|MAX_CAPTURE/i.test(msg) && attempt < 5) {
+        await sleep(delay)
+        delay = Math.min(delay * 1.5, 2_000)
+        continue
+      }
+      throw e
+    }
+  }
+  throw new Error('captureVisibleTab: rate-limit retries exhausted')
+}
+
+async function runInTab(tabId, func, args = []) {
+  const [{ result } = {}] = await chrome.scripting.executeScript({ target: { tabId }, func, args })
+  return result
+}
+
+async function blobToDataUrl(blob) {
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  let binary = ''
+  const CHUNK = 0x8000
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK))
+  }
+  return `data:${blob.type || 'image/png'};base64,${btoa(binary)}`
+}
+
+// Full-page screenshot: scroll the active tab a viewport at a time, capture
+// each step, stitch the slices onto an OffscreenCanvas. Stays within the
+// extension's existing permissions (no chrome.debugger / CDP). Known limits:
+// position:fixed / sticky elements repeat on each slice, and lazy content has
+// to paint within SHOT_THROTTLE_MS of the scroll to land in the capture.
+async function captureFullPage(tab) {
+  const metrics = await runInTab(tab.id, () => ({
+    full: Math.max(
+      document.documentElement.scrollHeight,
+      document.body ? document.body.scrollHeight : 0,
+      document.documentElement.clientHeight,
+    ),
+    view: window.innerHeight,
+    origX: window.scrollX,
+    origY: window.scrollY,
+  }))
+  if (!metrics || !metrics.view) return { ok: false, error: 'page-metrics-failed' }
+
+  const step = Math.max(1, metrics.view)
+  const slices = Math.min(Math.ceil(metrics.full / step), FULLPAGE_MAX_SLICES)
+
+  let canvas = null
+  let ctx = null
+  let lastY = -1
+  for (let i = 0; i < slices; i++) {
+    const actualY = await runInTab(tab.id, (y) => { window.scrollTo(0, y); return window.scrollY }, [i * step])
+    await sleep(SHOT_THROTTLE_MS)
+    const dataUrl = await captureVisible(tab.windowId)
+    const bmp = await createImageBitmap(await (await fetch(dataUrl)).blob())
+    const dpr = bmp.height / metrics.view
+    if (!canvas) {
+      canvas = new OffscreenCanvas(bmp.width, Math.round(metrics.full * dpr))
+      ctx = canvas.getContext('2d')
+    }
+    ctx.drawImage(bmp, 0, Math.round((actualY ?? i * step) * dpr))
+    if (bmp.close) bmp.close()
+    if (actualY <= lastY) break    // can't scroll further — bottom reached
+    lastY = actualY
+  }
+
+  await runInTab(tab.id, (x, y) => window.scrollTo(x, y), [metrics.origX, metrics.origY])
+  if (!canvas) return { ok: false, error: 'no-slices-captured' }
+
+  const dataUrl = await blobToDataUrl(await canvas.convertToBlob({ type: 'image/png' }))
+  return {
+    ok: true,
+    data: {
+      dataUrl,
+      tab_url: tab.url,
+      tab_title: tab.title,
+      full_page: true,
+      slices,
+      truncated: metrics.full > step * FULLPAGE_MAX_SLICES,
+    },
+  }
+}
+
 async function dispatchAction(action, args) {
   const tab = await getActiveTab()
   if (!tab?.id) return { ok: false, error: 'no-active-tab' }
 
   if (action === 'screenshot') {
-    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' })
+    if (args?.fullPage) return await captureFullPage(tab)
+    const dataUrl = await captureVisible(tab.windowId)
     return { ok: true, data: { dataUrl, tab_url: tab.url, tab_title: tab.title } }
   }
 

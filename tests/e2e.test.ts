@@ -103,6 +103,19 @@ before(async () => {
       res.end('<!doctype html><title>RX-NAV</title><h1 id=hi>hello</h1>')
       return
     }
+    if (url.startsWith('/tall')) {
+      // Five full-viewport bands → ~5 stitched slices for the full-page test.
+      res.writeHead(200, { 'content-type': 'text/html' })
+      res.end(
+        '<!doctype html><title>RX-TALL</title><body style="margin:0">' +
+          '<div style="height:100vh;background:#f00"></div>' +
+          '<div style="height:100vh;background:#0f0"></div>' +
+          '<div style="height:100vh;background:#00f"></div>' +
+          '<div style="height:100vh;background:#ff0"></div>' +
+          '<div style="height:100vh;background:#0ff" id=bottom>bottom</div></body>',
+      )
+      return
+    }
     res.writeHead(404).end()
   })
   await new Promise<void>((r) => pageServer!.listen(PAGE_PORT, '127.0.0.1', r))
@@ -130,7 +143,7 @@ before(async () => {
   const swTarget = await waitFor(async () => {
     const t = browser!.targets().find((t) => t.type() === 'service_worker' && t.url().includes('background.js'))
     return t
-  }, { timeout: 15_000 })
+  }, { timeout: 45_000 })
 
   const worker = await swTarget.worker()
   assert.ok(worker, 'extension service worker not reachable')
@@ -150,12 +163,14 @@ before(async () => {
   const page = await browser.newPage()
   await page.goto(`${PAGE_BASE}/seed`, { waitUntil: 'networkidle0' })
 
-  // Wait for the relay to see our browser register.
+  // Wait for the relay to see our browser register. Generous timeout: headless
+  // Chromium cold-start + extension SW spin-up + WS connect can run ~18s on a
+  // loaded machine, and a too-tight budget here flakes the whole suite.
   await waitFor(async () => {
     const r = await fetch(`${RELAY_BASE}/browsers`, { headers: { authorization: `Bearer ${POSTER}` } })
     const j = (await r.json()) as { browsers: { id: string; online: boolean }[] }
     return j.browsers.find((b) => b.id === BROWSER_ID && b.online) ? true : false
-  }, { timeout: 15_000 })
+  }, { timeout: 45_000 })
 })
 
 after(async () => {
@@ -194,6 +209,48 @@ test('end-to-end: enqueue screenshot → result delivered', async () => {
   assert.equal(result.ok, true, `result error: ${result.error}`)
   assert.ok(result.data?.dataUrl?.startsWith('data:image/png;base64,'), 'screenshot dataUrl not png')
   assert.ok((result.data?.dataUrl?.length ?? 0) > 1000, 'screenshot suspiciously small')
+})
+
+// PNG dims live in the IHDR chunk: 8-byte signature, 4-byte length, 4-byte
+// "IHDR", then width (u32 BE) and height (u32 BE).
+function pngSize(dataUrl: string): { width: number; height: number } {
+  const buf = Buffer.from(dataUrl.split(',')[1], 'base64')
+  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) }
+}
+
+async function enqueue(body: Record<string, unknown>): Promise<string> {
+  const r = await fetch(`${RELAY_BASE}/enqueue`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${POSTER}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ target: BROWSER_ID, ...body }),
+  })
+  assert.equal(r.ok, true, `enqueue HTTP ${r.status}`)
+  return ((await r.json()) as { cmd_id: string }).cmd_id
+}
+
+test('end-to-end: full-page screenshot stitches beyond the viewport', async () => {
+  // Point the active tab at a 5-viewport-tall page.
+  const navResult = await pollUntilResult(await enqueue({ action: 'navigate', args: { url: `${PAGE_BASE}/tall` } }))
+  assert.equal(navResult.ok, true, `navigate error: ${navResult.error}`)
+  await new Promise((r) => setTimeout(r, 800))
+
+  // Viewport-only baseline.
+  const viewRes = await pollUntilResult(await enqueue({ action: 'screenshot' }))
+  assert.equal(viewRes.ok, true, `viewport shot error: ${viewRes.error}`)
+  const viewSize = pngSize(viewRes.data.dataUrl)
+
+  // Full-page capture of the same tall page.
+  const fullRes = await pollUntilResult(await enqueue({ action: 'screenshot', args: { fullPage: true } }), 30_000)
+  assert.equal(fullRes.ok, true, `full-page error: ${fullRes.error}`)
+  assert.equal(fullRes.data.full_page, true)
+  assert.ok(fullRes.data.slices >= 2, `expected multiple slices, got ${fullRes.data.slices}`)
+  const fullSize = pngSize(fullRes.data.dataUrl)
+
+  assert.equal(fullSize.width, viewSize.width, 'full-page width should match the viewport capture')
+  assert.ok(
+    fullSize.height > viewSize.height * 2,
+    `full-page height ${fullSize.height} should exceed 2x the viewport height ${viewSize.height}`,
+  )
 })
 
 test('end-to-end: navigate + query roundtrip', async () => {
