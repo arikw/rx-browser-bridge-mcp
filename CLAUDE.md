@@ -9,21 +9,6 @@ session and a browser extension. Lets CC drive any tab in any browser
 the user has open (assuming the extension is loaded + registered with
 the relay).
 
-## Tool routing — the user's live browser
-
-When the user refers to **their own already-open browser** — e.g. "look
-at my tab", "the current website", "my browser", "the page I'm on",
-"what I'm looking at" — handle it with the **rx-browser-bridge** MCP
-tools (`mcp__browser-bridge__*`: `list_browsers`, `screenshot`,
-`navigate`, `new_tab`, `click`, `fill`, `query`, `evaluate`). These drive
-the user's real browser (their sessions, cookies, extensions) via the
-loaded extension.
-
-Do NOT reach for puppeteer / playwright / chrome-devtools MCPs for those
-phrases — they spawn a fresh, isolated browser with none of the user's
-state, which is not what "my browser" means. Reserve those only for
-explicit clean-room / throwaway-browser requests.
-
 ## Three components
 
 1. **`relay/`** — Node HTTP+WS server. In-memory command queue +

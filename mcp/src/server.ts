@@ -72,7 +72,18 @@ async function runTool(action: string, params: Record<string, unknown>) {
 
 const mcp = new Server(
   { name: 'rx-browser-bridge', version: '0.1.0' },
-  { capabilities: { tools: {} } },
+  {
+    capabilities: { tools: {} },
+    instructions:
+      "These tools drive the user's OWN already-open browser (their real session, " +
+      'cookies, logins, and extensions) through a loaded browser extension, via a relay. ' +
+      'Prefer them whenever the user refers to their live browser — e.g. "my browser", ' +
+      '"the current tab/page", "the site I\'m on", "what I\'m looking at", "open X in my browser". ' +
+      'Do NOT use a fresh-browser automation server (playwright, puppeteer, chrome-devtools) for ' +
+      "those references — those spawn an isolated browser with none of the user's state. Reserve " +
+      'fresh-browser tools for explicit clean-room / throwaway-browser requests. Call list_browsers ' +
+      'first to see which of the user\'s browsers are connected and pick a target (by id or tag).',
+  },
 )
 
 const TOOLS = [
